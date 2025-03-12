@@ -1,0 +1,7 @@
+pandas
+numpy
+Bio
+scikit-bio
+scikit-learn
+seaborn
+editdistance
