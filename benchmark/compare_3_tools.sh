@@ -46,9 +46,9 @@ run_UMI-nea() {
         echo "$name $rep UMI-nea" >> UMI-nea.time
 	if [ $dist -gt 0 ]; then
 	    echo "err is $dist"
-	    { time timeout ${time_lim} bash -c "$code_dir/tools/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -m $dist -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
+	    { time timeout ${time_lim} bash -c "/Download/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -m $dist -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
 	else
-	    { time timeout ${time_lim} bash -c "$code_dir/tools/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -e $err_rate -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
+	    { time timeout ${time_lim} bash -c "/Download/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -e $err_rate -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
 	fi
         join <(cat UMI-nea/sim${rep}.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.labels
         get_clustering_score UMI-nea/sim${rep}.labels sim${rep}.truth.labels UMI-nea.sim${rep}.score
@@ -109,7 +109,7 @@ run_UMIC-seq() {
         e=40
         if [ $umi_len -lt 20 ]; then
             s=5
-            e=25
+            e=19
         fi
         gt=$s
         echo "$name $rep UMIC-seq" >> UMIC-seq.time
