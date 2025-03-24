@@ -46,20 +46,20 @@ void PrintHelp_one_line(string p, string m){
 }
 
 void PrintHelp(){
-	PrintHelp_one_line("--maxL -l <int|default:-1>", "required to set! Max length of UMI, longer UMIs will be trimmed to the length set");
-	PrintHelp_one_line("--in -i <fname>:", "input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads");
-	PrintHelp_one_line("--out -o <fname>:", "output file, three cols, groupID, UMI, founderUMI");
-	PrintHelp_one_line("--minC -m <int|default:2>:", "min levenshtein distance cutoff, overruled by -e");
-	PrintHelp_one_line("--errorR -e <float|default:none>:", "if set, -m will be calculated based on binomial CI, override -m");
-	PrintHelp_one_line("--minF -f <int|default:1>", "min reads count for a UMI to be founder, overruled by -n or -k");
+	PrintHelp_one_line("--maxL -l <int|default:-1>", "Max length of UMI, longer UMIs will be trimmed to the length set! Required to set for UMI clustering!");
+	PrintHelp_one_line("--in -i <fname>:", "Input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads");
+	PrintHelp_one_line("--out -o <fname>:", "Output file, output has three cols, GroupID, UMI, FounderUMI");
+	PrintHelp_one_line("--minC -m <int|default:2>:", "Min levenshtein distance cutoff, overruled by -e");
+	PrintHelp_one_line("--errorR -e <float|default:none>:", "If set, -m will be calculated based on binomial CI, override -m");
+	PrintHelp_one_line("--minF -f <int|default:1>", "Min reads count for a UMI to be founder, overruled by -n or -k");
 	PrintHelp_one_line("--nb -n <default:false>:", "Apply negative binomial model to decide min reads for a founder, override -f");
         PrintHelp_one_line("--kp -k <default:false>:", "Apply knee plot to decide min reads for a founder, override -f");
-	PrintHelp_one_line("--auto -a <default:false>:", "Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f");
+	PrintHelp_one_line("--auto -a <default:true>:", "Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--just -j <default:false>:", "Just estimate molecule number and rpu cutoff");
-	PrintHelp_one_line("--prob -q <default:0.001>:", "probability for nb lower tail quantile cutoff");
-	PrintHelp_one_line("--first -d <default:false>:", "first founder mode, first founder below cutoff to be selected, which speed up computation but affect reprouciblity. Default No which enforce to find the best founder");
-	PrintHelp_one_line("--thread -t <int|default:10>:", "num of thread to use, minimal 2");
-	PrintHelp_one_line("--pool -p <int|default:1000>:", "total UMIs to process in each thread");
+	PrintHelp_one_line("--prob -q <default:0.001>:", "probability for nb lower tail quantile cutoff in quantification");
+	PrintHelp_one_line("--first -d <default:false>:", "First founder mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder");
+	PrintHelp_one_line("--thread -t <int|default:10>:", "Num of thread to use, minimal 2");
+	PrintHelp_one_line("--pool -p <int|default:1000>:", "Total UMIs to process in each thread at one time");
         PrintHelp_one_line("--help -h:", "Show help");
 	exit(1);
 }

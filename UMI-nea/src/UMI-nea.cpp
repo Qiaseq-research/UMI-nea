@@ -157,7 +157,6 @@ double get_angle( pair<double,double> A, pair<double,double> B , pair<double,dou
 
 	double beta = acos((a2 + c2 - b2)/(2*a*c));
 	beta = beta * 180 / PI;
-	//cout << beta <<" ";
 	return (beta);
 }
 
@@ -308,15 +307,15 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
       producer_done=false;
       int write_every=ceil(umi_pool_subset.size()/10)>10?ceil(umi_pool_subset.size()/10):10;
 
-      auto begin_time = Clock::now();
       int founder_clustered=0;
       vector <string> lines;
       for (auto const & u: umi_pool_subset){
 	    int offset = u.founder_offset;
 	    string umi = u.UMI_seq;
-	    string line = primer_id + "\t" + umi + "\t" + umi + "\t" + "founder-new\n";
+	    //new founder being found:
+	    //string line = primer_id + "\t" + umi + "\t" + umi + "\t" + "founder-new\n";
+	    string line = primer_id + "\t" + umi + "\t" + umi + "\n";
 	    bool clustered = false;
-	    auto s_time = Clock::now();
 	    if (founder_added>0){
 		  stringstream ss;
 		  for (int i = offset; i < founders.myvector.size(); ++i) {
@@ -330,15 +329,23 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 			int ind=(endpos-N_num)/(max_umi_len+N_num)+offset;
 			string clustered_founder=founders.myvector[ind];
 			if (u.founder_temp_found  && dist<u.founder_temp_dist )
-			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
+			      //line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
+			      //Real founder being found, replace temp founder
+			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 			else if (u.founder_temp_found  && dist>=u.founder_temp_dist ){
-			      line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec1\n";
+			      //line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec1\n";
+			      //After checking all UMI in the front line, temp founder seems to be better
+			      line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
 			}
 			else
-			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
+			      //line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
+			      //No temp founder for UMI but founder being found now
+			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 		  }
 		  else if (u.founder_temp_found ){
-			line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec2\n";
+			//line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec2\n";
+			//After checking all UMI in the front line, only option is to choose  temp founder
+			line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
 		  }
 		  else{
 			founders.guard.lock();
@@ -365,7 +372,6 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 	    shared_writer(out, lines);
       }
 
-      auto now_time = Clock::now();
       producer_done=true;
       founders.guard.lock();
       founders.size_last_cycle=founders.myvector.size();
@@ -690,8 +696,6 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       string curr_primer_id;
       int round=0;
       int lines=0;
-      auto begin_time = Clock::now();
-      auto clustering_start_time = Clock::now();
 
       while (getline(in_file, line)) {
 	    istringstream ss(line);
@@ -736,26 +740,17 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    if ( umi_pool.size() == total_umis_in_a_run){
 		  round++;
 		  parallel_processing( umi_pool,  out_file, parameters);
-		  auto now_time = Clock::now();
-		  if (verbose)
-			cout <<"Lines=\t"<<lines<<"\tround= "<<round<<" time="<<chrono::duration_cast<chrono::milliseconds>(now_time - begin_time).count()<<" millisec" <<"\tTotaltime= "<<chrono::duration_cast<chrono::milliseconds>(now_time - clustering_start_time).count() <<" millisec "<<"UMIs_in_pool= "<<umi_pool.size() << " founders= " << founders.myvector.size()<< endl;
-		  begin_time = now_time;
 	    }
       }
       //read last line of input file
       while (!umi_pool.empty()) {
 	    int process_umi=umi_pool.size();
 	    parallel_processing(umi_pool,  out_file, parameters);
-	    auto now_time = Clock::now();
-	    if (verbose)
-		cout <<"Reading file finished. Now finish up processing umi pool for last primer "<<curr_primer_id<<" the umi pool Size="<<process_umi<< " time="<<chrono::duration_cast<chrono::milliseconds>(now_time - begin_time).count()<<" millisec" <<" Total time="<<chrono::duration_cast<chrono::milliseconds>(now_time - clustering_start_time).count() <<"millisec" <<  endl;
-	    begin_time = now_time;
       }
       if (!low_reads_umi_pool.empty()){
 	    parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
       }
-      auto now_time = Clock::now();
-      cout <<"All done!  Total time="<<chrono::duration_cast<chrono::milliseconds>(now_time - clustering_start_time).count() <<"millisec" << endl;
+      cout <<"All done!" << endl;
 }
 
 void update_umi_reads_count(const string updated_count_filename, const string in_filename, const string out_filename){
