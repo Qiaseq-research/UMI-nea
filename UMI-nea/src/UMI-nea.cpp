@@ -453,7 +453,8 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 			string clustered_founder=founder_view[ind];
 
 			if (dist<=stop_search_dist){
-			      string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\t"+"customer"+to_string(worker_index)+"\n";
+			      //string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\t"+"customer"+to_string(worker_index)+"\n";
+			      string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 			      lines.push_back(line);
 			      if (lines.size()>=write_every){
 				    shared_writer(out, lines);
