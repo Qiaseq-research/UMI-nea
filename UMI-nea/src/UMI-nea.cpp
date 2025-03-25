@@ -244,14 +244,14 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       int mad_rpu=mad(read_replicated_data);
       vector<int> read_replicated_filtered_data=read_replicated_data;
       int lower_bound_rpu;
-      if (mad_rpu!=0){ //for high input samples, we saw rpu is below 6 for all UMIs, the MAD will be 0 in those cases.
+      if (mad_rpu!=0){ //for super high input samples, we had example that rpu is below 6 for all UMIs, the MAD will be 0 in those cases.
 	     lower_bound_rpu=median_rpu-3*mad_rpu;
              sort (read_replicated_data.begin(), read_replicated_data.end());
              auto lower_bound_it = lower_bound(read_replicated_data.begin(), read_replicated_data.end(), lower_bound_rpu);
 	     vector <int> temp(lower_bound_it, read_replicated_data.end() );
 	     read_replicated_filtered_data=temp;
       }
-      if (var(read_replicated_filtered_data ) == 0){ //this is the case that after removing outliners or the in raw input, only one rpu present
+      if (var(read_replicated_filtered_data ) == 0){ //this is the case that after removing outliners or even just in the input, only one rpu present
 		min_read_founder=umi_data[0];
 		nb_estimated_molecule=umi_data.size();
 		if (verbose)
@@ -262,7 +262,8 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       long double nb_r=pow(mean(read_replicated_filtered_data), 2)/(var(read_replicated_filtered_data)-mean(read_replicated_filtered_data));
       if (verbose)
 		cout<<"lower_bound_rpu="<<lower_bound_rpu<<"\ndata_size="<<read_replicated_filtered_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data )<<"\nMAD="<<mad_rpu<<endl;
-      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r not very accurate, (found in some high input samples!) so just give UMI clustering results
+
+      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r very inaccurate, (found in some high input samples!) so just give UMI clustering results
 		min_read_founder=1;
 		nb_estimated_molecule=umi_data.size();
 		return;
@@ -313,7 +314,6 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 	    int offset = u.founder_offset;
 	    string umi = u.UMI_seq;
 	    //new founder being found:
-	    //string line = primer_id + "\t" + umi + "\t" + umi + "\t" + "founder-new\n";
 	    string line = primer_id + "\t" + umi + "\t" + umi + "\n";
 	    bool clustered = false;
 	    if (founder_added>0){
@@ -329,21 +329,17 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 			int ind=(endpos-N_num)/(max_umi_len+N_num)+offset;
 			string clustered_founder=founders.myvector[ind];
 			if (u.founder_temp_found  && dist<u.founder_temp_dist )
-			      //line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
 			      //Real founder being found, replace temp founder
 			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 			else if (u.founder_temp_found  && dist>=u.founder_temp_dist ){
-			      //line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec1\n";
 			      //After checking all UMI in the front line, temp founder seems to be better
 			      line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
 			}
 			else
-			      //line = primer_id + "\t" + umi + "\t" + clustered_founder + "\tf-ced\n";
 			      //No temp founder for UMI but founder being found now
 			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 		  }
 		  else if (u.founder_temp_found ){
-			//line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\tf-rec2\n";
 			//After checking all UMI in the front line, only option is to choose  temp founder
 			line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
 		  }
@@ -453,7 +449,7 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 			string clustered_founder=founder_view[ind];
 
 			if (dist<=stop_search_dist){
-			      //string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\t"+"customer"+to_string(worker_index)+"\n";
+			      //founder being found in consumer pool as the distance to founder <= 1 or if first founder mode is on and dist is <= cutoff
 			      string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 			      lines.push_back(line);
 			      if (lines.size()>=write_every){
@@ -630,10 +626,12 @@ void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id
 	    if (align_umi( padding+umi+padding, padding+founder_string,  max_dist, endpos, dist)) {
 		  int ind=(endpos-N_num)/(max_umi_len+N_num)  ;
 		  string clustered_founder=founder_view[ind];
-		  line = primer_id + "\t" + umi + "\t" + clustered_founder + "\t"+"clustered"+to_string(pool)+"\n";
+		  //founder being found for UMIs not qualified for founder for other UMIs
+		  line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
 	    }
 	    else{
-		  line = primer_id + "\t" + umi + "\t" + umi + "\t"+"founder"+to_string(pool)+"\n";
+		  //no exising founder being found, this UMI is the founder for itself
+		  line = primer_id + "\t" + umi + "\t" + umi + "\n";
 	    }
 	    lines.push_back(line);
 	    if (lines.size()>=write_every){

@@ -1,5 +1,5 @@
 To build docker image of umi-nea, run:
-docker-compose build
+docker-compose build --no-cache
 
 To start a interactive docker container:
 docker run -it  --name <umi-nea-container-name> umi-nea
