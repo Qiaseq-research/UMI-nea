@@ -132,6 +132,7 @@ run_UMIC-seq() {
     fi
 }
 
+echo "parent_num offspring_num umi_len err_rate uniq_umi dist collision_rate runtime_in_sec V-measure homogeneity_score completeness_score" > ../performance.txt
 for rep in `seq 1 3`; do
     if [ ! -f sim${rep}.truth.labels ]; then
         simulate_umi $rep
