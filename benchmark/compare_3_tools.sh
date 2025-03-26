@@ -62,9 +62,11 @@ run_umi-tools() {
         samtools index umi-tools/sim${rep}.srt.bam
         echo "$name $rep umi-tools" >> umi-tools.time
     if [ $dist -eq 0 ]; then
-        dist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
+        maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
+    else
+        maxdist=$dist
     fi
-        { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.log --method=adjacency"; } 2>> umi-tools.time
+        { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$maxdist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.log --method=adjacency"; } 2>> umi-tools.time
         if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
             join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.labels
         fi
@@ -151,7 +153,7 @@ END
         run_UMIC-seq $rep
     fi
     if [ $dist -eq 0 ]; then
-        dist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
+        maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
     fi
     for eval_t in "UMI-nea" "umi-tools" "UMIC-seq"; do
         if [ ! -f $eval_t.sim${rep}.score ]; then
@@ -169,6 +171,6 @@ END
             score_h=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$4}'`
             score_c=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$7}'`
         fi
-        echo "$pN $oN $umi_len $err_rate $uniq_umi $dist $r_collision $eval_t $runtime_t $score_v $score_h $score_c" >> ../performance.txt
+        echo "$pN $oN $umi_len $err_rate $uniq_umi $maxdist $r_collision $eval_t $runtime_t $score_v $score_h $score_c" >> ../performance.txt
     done
 done
