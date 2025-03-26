@@ -10,9 +10,6 @@ RUN apt-get -y update && \
 RUN apt-get -y install samtools
 RUN apt-get -y install bwa
 
-RUN mkdir -p /Download/
-COPY UMI-nea /Download/UMI-nea
-
 COPY libboost_iostreams.so /usr/lib/libboost_iostreams.so.1.62.0
 COPY libparasail.so /usr/lib/libparasail.so.3
 COPY requirements.txt /tmp/
@@ -21,7 +18,11 @@ RUN pip install umi_tools
 RUN pip install --requirement /tmp/requirements.txt
 COPY network.py /usr/local/lib/python3.8/site-packages/umi_tools/
 
+RUN mkdir -p /Download/
 WORKDIR /Download/
+RUN git clone https://github.com/Qiaseq-research/UMI-nea.git
+RUN cd UMI-nea/UMI-nea && make
+
 RUN git clone https://github.com/fhlab/UMIC-seq.git
 
 CMD ["/bin/bash"]
