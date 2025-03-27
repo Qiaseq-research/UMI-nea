@@ -8,6 +8,7 @@ docker run --name umi_nea -d -v ${PWD}:/home/qiauser -w /home/qiauser -v <data>:
 
 To run UMI-nea for UMI clustering and quantification, ie. for most users :
 ./UMI-nea -l <max-umi-len> -i <input-file> -e <error_rate> -t <threads>
+
 To run UMI-nea only for quantification based on input file, ie. for most users :
 ./UMI-nea -i  <input-file> -j
 
