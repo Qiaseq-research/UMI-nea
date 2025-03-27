@@ -1,10 +1,10 @@
 To pull docker image of umi-nea, run:
-docker pull jingxiaozhang/umi-nea-publication:v1.0.0
+docker pull jingxiaozhang/umi-nea:latest
 
 To start a interactive docker container:
-docker run -it  --name <umi-nea-container-name> umi-nea
+docker run -it --name umi_nea jingxiaozhang/umi-nea:latest
 To start a detached docker container running UMI-nea
-docker run --name umi_nea -d -v ${PWD}:/home/qiauser -w /home/qiauser -v <data>:/data jingxiaozhang/umi-nea-publication:v1.0.0 bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i /data/<input-file> -l <max-length>  -e <error_rate> -t <threads> -o <output-file> 2> umi-nea.error.txt"
+docker run --name umi_nea -d -v ${PWD}:/home/qiauser -w /home/qiauser -v <data>:/data jingxiaozhang/umi-nea:latest bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i /data/<input-file> -l <max-length>  -e <error_rate> -t <threads> -o <output-file> 2> umi-nea.error.txt"
 
 To run UMI-nea for UMI clustering and quantification, ie. for most users :
 ./UMI-nea -l <max-umi-len> -i <input-file> -e <error_rate> -t <threads>

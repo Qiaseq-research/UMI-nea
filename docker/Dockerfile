@@ -10,8 +10,6 @@ RUN apt-get -y update && \
 RUN apt-get -y install samtools
 RUN apt-get -y install bwa
 
-COPY libboost_iostreams.so /usr/lib/libboost_iostreams.so.1.62.0
-COPY libparasail.so /usr/lib/libparasail.so.3
 COPY requirements.txt /tmp/
 
 RUN pip install umi_tools
