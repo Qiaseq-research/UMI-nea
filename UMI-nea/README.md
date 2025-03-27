@@ -12,6 +12,7 @@ To run UMI-nea only for quantification based on input file, ie. for most users :
 ./UMI-nea -i  <input-file> -j
 
 Parameter for UMI-nea:
+
 --maxL -l <int|default:-1>          Max length of UMI, longer UMIs will be trimmed to the length set! Required to set for UMI clustering!
 
 --in -i <fname>:                    Input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads
