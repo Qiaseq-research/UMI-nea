@@ -2,4 +2,4 @@ version: '2'
 services:
   man:
     build: .
-    image: jingxiaozhang/umi-nea:latest
+    image: qiaseqresearch/umi-nea:latest
