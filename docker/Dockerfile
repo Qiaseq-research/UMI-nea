@@ -18,7 +18,7 @@ COPY network.py /usr/local/lib/python3.8/site-packages/umi_tools/
 
 RUN mkdir -p /Download/
 WORKDIR /Download/
-RUN git clone https://github.com/Qiaseq-research/UMI-nea.git
+RUN git clone -b develop --single-branch https://github.com/Qiaseq-research/UMI-nea.git
 RUN cd UMI-nea/UMI-nea && make
 
 RUN git clone https://github.com/fhlab/UMIC-seq.git

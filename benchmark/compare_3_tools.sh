@@ -3,10 +3,11 @@ umi_len=$1 # umi length
 acc=$2 # accuracy
 pN=$3 # number of founder
 oN=$4 # number of offspring
-dist=$5 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
-umic_threshold=$6 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
-mut_ratio=$7
-p1_ratio=$8
+num_rep=$5 # number of replicates
+dist=$6 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
+umic_threshold=$7 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
+mut_ratio=$8
+p1_ratio=$9
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
@@ -136,7 +137,7 @@ run_UMIC-seq() {
 }
 
 echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool dist thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
-for rep in `seq 1 1`; do
+for rep in `seq 1 $num_rep`; do
     if [ ! -f sim${rep}.truth.labels ]; then
         simulate_umi $rep
     fi
@@ -158,11 +159,11 @@ for rep in `seq 1 1`; do
     
     #n_collision=`cat sim${rep}.truth.labels | sort | uniq -c | awk '{print $2,$3,$1}' | awk '{if(a[$1]==""){a[$1]=$2" "$3}else{a[$1]=a[$1]" "$2" "$3}}END{for(i in a){print i,a[i]}}' | awk 'NF>3{n=0;for(i=2;i<NF;i+=2){n+=$(i+1)};print n}' | awk -v n=0 '{n+=$1}END{print n}'`
     #r_collision=`echo "$n_collision/$total_reads" | bc -l`
-
+: <<'END'
+END
     if [ ! -f UMI-nea.sim${rep}.score ]; then
         run_UMI-nea $rep
     fi
-: <<'END'
 
     if [ ! -f umi-tools.sim${rep}.score ]; then
         run_umi-tools $rep
@@ -171,7 +172,6 @@ for rep in `seq 1 1`; do
     if [ ! -f UMIC-seq.sim${rep}.score ]; then
         run_UMIC-seq $rep
     fi
-END
 
     for eval_t in "UMI-nea" "umi-tools" "UMIC-seq"; do
         if [ ! -f $eval_t.sim${rep}.score ]; then
@@ -179,10 +179,10 @@ END
             score_v="NA"
             score_h="NA"
             score_c="NA"
-	    n_cluster="NA"
+            n_cluster="NA"
             rpu_cutoff="NA"
-	    rpu_model="NA"
-	    est_mol="NA"
+            rpu_model="NA"
+            est_mol="NA"
         else
             if [ $eval_t != "UMIC-seq" ]; then
                 runtime_t=`cat $eval_t.time | grep -A 2 "$name $rep" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
