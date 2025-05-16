@@ -5,6 +5,8 @@ pN=$3 # number of founder
 oN=$4 # number of offspring
 dist=$5 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
 umic_threshold=$6 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
+mut_ratio=$7
+p1_ratio=$8
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
@@ -19,8 +21,9 @@ rdn="@M01750:63:000000000-KLHVC:1:1101:18381:1596"
 
 simulate_umi() {
     rep=$1
-    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN 1 > log/simulate.sim${rep}.log
-    join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat sim${rep}.out | cut -f1,2 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > sim${rep}.truth.labels
+    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN 1 $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
+    cat sim${rep}.truth.labels | sort -k1,1 -k2,2n > sim.l && mv sim.l sim${rep}.truth.labels
+    #join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat sim${rep}.out | cut -f1,2 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > sim${rep}.truth.labels
 }
 
 get_clustering_score() {
@@ -43,9 +46,9 @@ run_UMI-nea() {
         echo "$name $rep UMI-nea" >> UMI-nea.time
         if [ $dist -gt 0 ]; then
             echo "err is $dist"
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -m $dist -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 48 -m $dist -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
         else
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 100 -e $err_rate -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 48 -e $err_rate -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
         fi
         join <(cat UMI-nea/sim${rep}.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.labels
         get_clustering_score UMI-nea/sim${rep}.labels sim${rep}.truth.labels UMI-nea.sim${rep}.score
@@ -76,7 +79,7 @@ run_umi-tools() {
 
 find_threshold() {
     rep=$1
-    cutoff=`echo "$umi_len*0.02" | bc -l`
+    cutoff=`echo "$umi_len*0.005" | bc -l`
     base_sim=`echo "$umi_len*0.5" | bc`
     i=0
     s0=0
@@ -108,11 +111,11 @@ run_UMIC-seq() {
         e=40
         if [ $umi_len -lt 20 ]; then
             s=5
-            e=19
+            e=25
         fi
         gt=$s
         echo "$name $rep UMIC-seq" >> UMIC-seq.time
-        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 100 clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --steps $s $e 1 > log/UMIC-seq.sim${rep}.clustertest.log 2>&1"; } 2>> UMIC-seq.time
+        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 48 clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --steps $s $e 1 > log/UMIC-seq.sim${rep}.clustertest.log 2>&1"; } 2>> UMIC-seq.time
     fi
     if [ ! -f UMIC-seq/sim${rep}.labels ]; then
         if [ $umic_threshold -eq 0 ]; then
@@ -122,7 +125,7 @@ run_UMIC-seq() {
             gt=$umic_threshold
         fi
         echo "Threshold is $gt" > log/UMIC-seq.sim${rep}.log
-        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 100 clusterfull -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --reads UMIC-seq/sim${rep}.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> log/UMIC-seq.sim${rep}.log 2>&1"; } 2>> UMIC-seq.time
+        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 48 clusterfull -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --reads UMIC-seq/sim${rep}.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> log/UMIC-seq.sim${rep}.log 2>&1"; } 2>> UMIC-seq.time
         for i in UMIC-seq/sim${rep}/cluster_*.fasta; do
             c=`echo $i | cut -d/ -f3 | cut -d_ -f2 | cut -d. -f1`
             cat $i | grep ">" | awk -v clst=$c '{split($1,n,"_"); print n[2],clst}' >> UMIC-seq/sim${rep}.labels
@@ -132,46 +135,77 @@ run_UMIC-seq() {
     fi
 }
 
-echo "parent_num offspring_num umi_len err_rate uniq_umi dist collision_rate runtime_in_sec V-measure homogeneity_score completeness_score" > ../performance.txt
-for rep in `seq 1 3`; do
+echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool dist thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
+for rep in `seq 1 1`; do
     if [ ! -f sim${rep}.truth.labels ]; then
         simulate_umi $rep
     fi
-    n_collision=`cat sim${rep}.truth.labels | sort | uniq -c | awk '{print $2,$3,$1}' | awk '{if(a[$1]==""){a[$1]=$2" "$3}else{a[$1]=a[$1]" "$2" "$3}}END{for(i in a){print i,a[i]}}' | awk 'NF>3{n=0;for(i=2;i<NF;i+=2){n+=$(i+1)};print n}' | awk -v n=0 '{n+=$1}END{print n}'`
-    total_reads=`cat sim${rep}.truth.labels | wc -l`
-    r_collision=`echo "$n_collision/$total_reads" | bc -l`
+    input_ratio=`echo $mut_ratio | sed 's/-/:/g'`
+    var_oN=`echo "$oN*$p1_ratio" | bc`
+    total_umi=`cat sim${rep}.out | wc -l`
+    s_mu=`cat sim${rep}.truth.labels | awk '{print $2}' | sort | uniq -c | awk '{print $1}' | awk -v n=0 '{n+=$1}END{print n/NR}'`
+    s_var=`cat sim${rep}.truth.labels | awk '{print $2}' | sort | uniq -c | awk '{print $1}' | awk -v a=0 -v m=$s_mu '{s=($1-m)*($1-m);a+=s}END{print int(a/(NR-1))}'`
+    umi_err=`cat sim${rep}.out | awk '$3!=""' | wc -l`
+    umi_sub=`cat sim${rep}.out | awk '$3!=""{gsub("[0-9]","",$3);gsub(":","",$3);split($3,n,"_");idl=0;for(i in n){m=n[i];split(m,n1,"/");if(length(n1[2])!=1){idl=1;break}};if(idl==0){print}}' | wc -l`
+    umi_idl=`echo "$umi_err-$umi_sub" | bc`
+    elist=`cat sim${rep}.out | awk -v s=0 -v i=0 -v d=0 '$3!=""{gsub("[0-9]","",$3);gsub(":","",$3);split($3,n,"_");for(x in n){m=n[x];split(m,n1,"/");if(length(n1[2])==1){s+=1}else if(length(n1[2])>1){i+=1}else{d+=1}}}END{print i,d,s}'`
+    bp_ins=`echo $elist | awk '{print $1}'`
+    bp_del=`echo $elist | awk '{print $2}'`
+    bp_sub=`echo $elist | awk '{print $3}'`
+    bp_idl=`echo "$bp_ins+$bp_del" | bc`
+    bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f:",$1/a;printf "%3.3f:",$2/a;printf "%3.3f",$3/a}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
+    
+    #n_collision=`cat sim${rep}.truth.labels | sort | uniq -c | awk '{print $2,$3,$1}' | awk '{if(a[$1]==""){a[$1]=$2" "$3}else{a[$1]=a[$1]" "$2" "$3}}END{for(i in a){print i,a[i]}}' | awk 'NF>3{n=0;for(i=2;i<NF;i+=2){n+=$(i+1)};print n}' | awk -v n=0 '{n+=$1}END{print n}'`
+    #r_collision=`echo "$n_collision/$total_reads" | bc -l`
 
-: <<'END'
-END
     if [ ! -f UMI-nea.sim${rep}.score ]; then
         run_UMI-nea $rep
     fi
+: <<'END'
+
     if [ ! -f umi-tools.sim${rep}.score ]; then
         run_umi-tools $rep
     fi
+
     if [ ! -f UMIC-seq.sim${rep}.score ]; then
         run_UMIC-seq $rep
     fi
-    if [ $dist -eq 0 ]; then
-        maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
-    fi
+END
+
     for eval_t in "UMI-nea" "umi-tools" "UMIC-seq"; do
         if [ ! -f $eval_t.sim${rep}.score ]; then
             runtime_t="NA"
             score_v="NA"
             score_h="NA"
             score_c="NA"
+	    n_cluster="NA"
+            rpu_cutoff="NA"
+	    rpu_model="NA"
+	    est_mol="NA"
         else
             if [ $eval_t != "UMIC-seq" ]; then
                 runtime_t=`cat $eval_t.time | grep -A 2 "$name $rep" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+                maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
             else
-                runtime_t=`cat $eval_t.time | grep -A 6	"$name $rep" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{print int(n)}'`
+                runtime_t=`cat $eval_t.time | grep -A 6 "$name $rep" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{print int(n)}'`
+                maxdist=`cat log/$eval_t.sim${rep}.log | head -1 | awk '{print $3}'`
             fi
             score_v=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$NF}'`
             score_h=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$4}'`
             score_c=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$7}'`
+            n_cluster=`cat $eval_t/sim${rep}.labels | cut -d" " -f2 | sort -u | wc -l`
+            if [ $eval_t == "UMI-nea" ]; then
+                rpu_cutoff=`cat $eval_t/sim${rep}.clustered.estimate | head -3 | tail -1 | awk '{print $NF}'`
+                rpu_model=`cat $eval_t/sim${rep}.clustered.estimate | head -1 | awk '{print ($1~/NB/?"negbinom":"kneeplot")}'`
+                est_mol=`cat $eval_t/sim${rep}.clustered.estimate | tail -1 | awk '{print $NF}'`
+            else
+                rpu_cutoff="NA"
+                rpu_model="NA"
+                est_mol=$n_cluster
+            fi
         fi
-        echo "$pN $oN $umi_len $err_rate $uniq_umi $maxdist $r_collision $eval_t $runtime_t $score_v $score_h $score_c" >> ../performance.txt
+        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist 48 $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
     done
 done
+

@@ -22,5 +22,6 @@ RUN git clone https://github.com/Qiaseq-research/UMI-nea.git
 RUN cd UMI-nea/UMI-nea && make
 
 RUN git clone https://github.com/fhlab/UMIC-seq.git
+COPY UMIC-seq.py UMIC-seq/
 
 CMD ["/bin/bash"]

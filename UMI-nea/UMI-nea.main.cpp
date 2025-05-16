@@ -32,9 +32,11 @@ int auto_estimated_molecule=0;
 int after_rpucut_molecule=0;
 int median_rpu=0;
 int max_umi_len=-1;
-float error_rate=0.0;
-bool first_founder_mode=false; //quick search mode, once founder found, immediately stop search,  no need to find the low distance founder, good enough for low sequencing error generated UMIs because -m will be small
-float nb_lowertail_p=0.001;
+float error_rate=0.001;
+bool set_error=false;
+bool greedy_mode=false; //quick search mode, once founder found, immediately stop search,  no need to find the low distance founder, good enough for low sequencing error generated UMIs because -m will be small
+//float nb_lowertail_p=0.001;
+float nb_lowertail_p=0.05;
 int madfolds=3;
 
 void PrintHelp_one_line(string p, string m){
@@ -50,24 +52,24 @@ void PrintHelp(){
 	PrintHelp_one_line("--in -i <fname>:", "Input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads");
 	PrintHelp_one_line("--out -o <fname>:", "Output file, output has three cols, GroupID, UMI, FounderUMI");
 	PrintHelp_one_line("--minC -m <int|default:2>:", "Min levenshtein distance cutoff, overruled by -e");
-	PrintHelp_one_line("--errorR -e <float|default:none>:", "If set, -m will be calculated based on binomial CI, override -m");
-	PrintHelp_one_line("--minF -f <int|default:1>", "Min reads count for a UMI to be founder, overruled by -n or -k");
+	PrintHelp_one_line("--errorR -e <float (0,1]|default:0.001>:", "If set, -m will be calculated based on binomial CI, override -m");
+	PrintHelp_one_line("--minF -f <int|default:1>", "Min reads count for a UMI to be founder, overruled by -a or -n or -k");
 	PrintHelp_one_line("--nb -n <default:false>:", "Apply negative binomial model to decide min reads for a founder, override -f");
         PrintHelp_one_line("--kp -k <default:false>:", "Apply knee plot to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--auto -a <default:true>:", "Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--just -j <default:false>:", "Just estimate molecule number and rpu cutoff");
-	PrintHelp_one_line("--prob -q <default:0.001>:", "probability for nb lower tail quantile cutoff in quantification");
-	PrintHelp_one_line("--first -d <default:false>:", "First founder mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder");
-	PrintHelp_one_line("--thread -t <int|default:10>:", "Num of thread to use, minimal 2");
-	PrintHelp_one_line("--pool -p <int|default:1000>:", "Total UMIs to process in each thread at one time");
+	PrintHelp_one_line("--prob -q <float [0, 1]|default:0.05>:", "probability for nb lower tail quantile cutoff in quantification! Not reommended to change");
+	PrintHelp_one_line("--greedy -d <default:false>:", "Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not reommended!");
+	PrintHelp_one_line("--thread -t <int >1 |default:10>:", "Num of thread to use, minimal 2");
+	PrintHelp_one_line("--pool -p <int >0 |default:1000>:", "Total UMIs to process in each thread at one time");
         PrintHelp_one_line("--help -h:", "Show help");
 	exit(1);
 }
 void PrintOptions(){
 	cout << endl<<"********************Input Parameters:************************"<<endl;
-	cout << "maxlenUMI = " << max_umi_len <<endl;
 	cout << "inFile=" << in_file << endl;
 	cout << "outFile=" << out_file << endl;
+	cout << "maxlenUMI = " << max_umi_len <<endl;
 
 	if (error_rate != 0)
                 cout << "errorRate = "<< error_rate << endl;
@@ -77,7 +79,6 @@ void PrintOptions(){
 	if (nb_estimate){
                 cout << "nb-Estimate = ON" << endl;
 		cout << "nb_lowertail_p = "<< nb_lowertail_p <<endl;
-		cout << "outliner-remove:MAD-folds = "<< madfolds <<endl;
 	}
 
 	if (kp_estimate)
@@ -86,14 +87,11 @@ void PrintOptions(){
 	if (auto_estimate)
                 cout << "auto-Estimate = ON" << endl;
 
-	if (just_estimate)
-		cout << "Just_do_estimate = ON" << endl;
-
 	if (!nb_estimate && !kp_estimate && !auto_estimate)
 		cout << "minReadsNumForFouner  = " << min_read_founder << endl;
 
-	if (first_founder_mode )
-                cout << "firstFounderMode = ON"<< endl;
+	if (greedy_mode )
+                cout << "greedy_Mode = ON"<< endl;
 
 	cout << "threads = " << num_thread << endl;
 	cout << "poolSize = " << pool_size << endl;
@@ -102,7 +100,7 @@ void PrintOptions(){
 }
 void ProcessArgs(int argc, char** argv)
 {
-      const char* const short_opts = "l:i:o:m:e:t:p:q:f:nkajdh";
+      const char* const short_opts = "l:i:o:m:e:t:p:q:f:agjkngh";
       const option long_opts[] = {
             {"maxL", required_argument, nullptr, 'l'},
             {"in", required_argument, nullptr, 'i'},
@@ -115,7 +113,7 @@ void ProcessArgs(int argc, char** argv)
             {"auto", no_argument, nullptr, 'a'},
 	    {"just", no_argument, nullptr, 'j'},
 	    {"prob", required_argument, nullptr, 'q'},
-	    {"first", no_argument, nullptr, 'd'},
+	    {"greedy", no_argument, nullptr, 'g'},
 	    {"thread", required_argument, nullptr, 't'},
 	    {"pool", required_argument, nullptr, 'p'},
             {"help", no_argument, nullptr, 'h'},
@@ -143,6 +141,7 @@ void ProcessArgs(int argc, char** argv)
                         break;
                   case 'e':
 			error_rate = atof(optarg);
+			set_error=true;
 			break;
 		  case 'f':
 			min_read_founder = atoi(optarg);
@@ -160,12 +159,13 @@ void ProcessArgs(int argc, char** argv)
 			break;
 		  case 'j':
 			just_estimate= true;
+			max_umi_len=1; //max_umi_len does not matter when -j
 			break;
 		  case 'q':
 			nb_lowertail_p = atof(optarg);
                         break;
-		  case 'd':
-                        first_founder_mode = true;
+		  case 'g':
+                        greedy_mode = true;
                         break;
 		  case 't':
                         num_thread  = atoi(optarg);
@@ -186,25 +186,44 @@ void ProcessArgs(int argc, char** argv)
 void capture_input_error(){
 	ifstream my_file(in_file);
 	if ( (auto_estimate && nb_estimate) || (auto_estimate && kp_estimate) || (nb_estimate && kp_estimate) ) {
-                cerr<<"You can only select one of the following -a, -n, -k"<<endl;
+                cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"You can only select one of the following -a, -n, -k"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
         }
         if (! my_file){
-            cerr<<"input file "<<in_file<<" not readble"<<"\n";
+            cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"input file "<<in_file<<" not readble"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
             PrintHelp();
         }
-        if ( max_umi_len < 0 && !just_estimate){
-                cerr<<"max_umi_len not set"<<"\n";
+        if ( max_umi_len < 0){
+                cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"max_umi_len="<<max_umi_len<<"; was Not set or Not set correctly"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
         }
-        if ( error_rate < 0 || error_rate > 1 || max_dist < 0 || pool_size < 1 || num_thread <2)
+        if ( error_rate <= 0 || error_rate > 1 ){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"error_rate="<<error_rate<<"; error_rate must set within (0,1]"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
+	}
+	if (max_dist < 0) {
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"max_dist="<<max_dist<<"; Not 0 or positive number"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+
+	}
+	if ( pool_size < 1 ){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"pool_size="<<pool_size <<", Not more than 0"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+	}
+	if (num_thread <2){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"num_thread="<<num_thread<<", Not more than 1"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+	}
+	if (nb_lowertail_p <0 || nb_lowertail_p >1 ){
+		 cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"nb_lowertail_p="<<nb_lowertail_p<<", must set within [0,1]"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+	}
 }
 
 int main(int argc, char **argv){
         ProcessArgs(argc, argv);
 	capture_input_error();
-	if (error_rate > 0){
+	if (set_error){
                 max_dist=calculate_dist_upper_bound (error_rate, max_umi_len );
         }
         if (out_file.empty())
@@ -231,7 +250,8 @@ int main(int argc, char **argv){
 				cout<<"NB_estimate\tON\nmedian_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<nb_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 		}
 		else{
-			cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<kp_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
+			if (just_estimate)
+				cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<kp_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 		}
 	}
 	if (!just_estimate)
@@ -243,7 +263,7 @@ int main(int argc, char **argv){
 	parameters.max_umi_len=max_umi_len;
 	parameters.max_dist=max_dist;
 	parameters.min_read_founder=min_read_founder;
-	parameters.first_founder_mode=first_founder_mode;
+	parameters.greedy_mode=greedy_mode;
 	parameters.thread=num_thread;
 	parameters.pool_size=pool_size;
 	clustering_umis(in_file, out_file,  parameters );
@@ -263,11 +283,10 @@ int main(int argc, char **argv){
 			do_kp(updated_count_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu,  e_out_file);
 	}
 	else{
-	// if just do clustering and not estimating for cutoff(none of -n -k -a were selected), and estimated molecule will simply equal to # of clustered UMI groups
+	// just do clustering and not estimating for cutoff(none of -n -k -a were selected), and estimated molecule will simply equal to # of clustered UMI groups
 		int estimate_molecules=count_umi(in_file);
-		cout<<"Before UMI clustering:"<<"\t"<<"rpu_cutoff=1"<<"\t"<<"estimate_molecules="<<estimate_molecules<<endl;
 		estimate_molecules=count_umi(updated_count_file);
-		cout<<"After UMI clustering:"<<"\t"<<"rpu_cutoff=1"<<"\t"<<"estimate_molecules="<<estimate_molecules<<endl;
+		cout<<"Just do UMI clustering:"<<"\t"<<"rpu_cutoff=1"<<"\t"<<"estimate_molecules="<<estimate_molecules<<endl;
 		e_out_file<<"rpu_cutoff\t"<<1<<endl;
                 e_out_file<<"estimated_molecules\t"<<estimate_molecules<<endl;
 	}
