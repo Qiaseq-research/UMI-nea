@@ -10,6 +10,9 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
     cp /data/$run/runList.tsv .
     for sample in `cat runList.tsv | cut -f1`; do
         mkdir -p $sample/log
+        if [ -f $sample/umi.clustered.TRB ]; then
+            continue
+        fi
         cp /data/$run/$sample/umi_clustering.consensus.input $sample/
         cp /data/$run/$sample/$sample.primer $sample/
         cp /data/$run/$sample/$sample.UMI $sample/
