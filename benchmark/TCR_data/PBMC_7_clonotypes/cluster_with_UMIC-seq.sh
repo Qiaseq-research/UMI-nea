@@ -31,7 +31,7 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
     mkdir -p $run/
     cd $run
     cp /data/$run/runList.tsv .
-    for sample in `cat runList.tsv`; do
+    for sample in `cat runList.tsv | cut -f1`; do
         mkdir -p $sample/log
         cp /data/$run/$sample/umi_clustering.consensus.input $sample/
         cp /data/$run/$sample/$sample.primer $sample/
@@ -45,10 +45,7 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
             find_threshold $sample/$sample.$p.clustertest
             gt=$?
             python /Download/UMIC-seq/UMIC-seq.py -T 48 clusterfull -i $sample/$sample.$p.fa -o $sample/$sample.$p --reads $sample/$sample.$p.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> $sample/log/UMIC-seq.$p.log 2>&1
-            break
         done
-        break
     done
-    break
     cd ..
 done

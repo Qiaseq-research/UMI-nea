@@ -8,7 +8,7 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
     mkdir -p $run/
     cd $run
     cp /data/$run/runList.tsv .
-    for sample in `cat runList.tsv`; do
+    for sample in `cat runList.tsv | cut -f1`; do
         mkdir -p $sample/log
         cp /data/$run/$sample/umi_clustering.consensus.input $sample/
         cp /data/$run/$sample/$sample.primer $sample/
