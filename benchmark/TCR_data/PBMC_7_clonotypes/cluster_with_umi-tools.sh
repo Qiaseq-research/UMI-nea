@@ -25,4 +25,5 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
             rm -rf $sample/$sample.$p.*.fastq
         done
     done
+    cd ../
 done
