@@ -6,8 +6,9 @@ oN=$4 # number of offspring
 num_rep=$5 # number of replicates
 dist=$6 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
 umic_threshold=$7 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
-mut_ratio=$8
-p1_ratio=$9
+mut_ratio=$8 # ins-del-sub
+p1_ratio=$9 # var/mean ratio for number of children simulation with negative bionmial distribution
+run_umi_nea_only=$9 # only run UMI-nea
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
@@ -161,15 +162,15 @@ END
     if [ ! -f UMI-nea.sim${rep}.score ]; then
         run_UMI-nea $rep
     fi
+    if [ $run_umi_nea_only -eq 0 ]; then
+        if [ ! -f umi-tools.sim${rep}.score ]; then
+            run_umi-tools $rep
+        fi
 
-    if [ ! -f umi-tools.sim${rep}.score ]; then
-        run_umi-tools $rep
+        if [ ! -f UMIC-seq.sim${rep}.score ]; then
+            run_UMIC-seq $rep
+        fi
     fi
-
-    if [ ! -f UMIC-seq.sim${rep}.score ]; then
-        run_UMIC-seq $rep
-    fi
-
     for eval_t in "UMI-nea" "umi-tools" "UMIC-seq"; do
         if [ ! -f $eval_t.sim${rep}.score ]; then
             runtime_t="NA"
