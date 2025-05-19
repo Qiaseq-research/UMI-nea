@@ -4,7 +4,7 @@ code_dir=`dirname $code`
 gene_lst="A B D G"
 read -ra genes <<< "$gene_lst"
 
-for sample in `cat runList.tsv | cut -f1`; do
+for sample in `cat runList.tsv`; do
     mkdir -p $sample/log
     cp /data/$sample/umi_clustering.consensus.input $sample/
     cp /data/$sample/$sample.primer $sample/

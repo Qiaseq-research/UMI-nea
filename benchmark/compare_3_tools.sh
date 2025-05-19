@@ -24,7 +24,6 @@ simulate_umi() {
     rep=$1
     python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN 1 $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
     cat sim${rep}.truth.labels | sort -k1,1 -k2,2n > sim.l && mv sim.l sim${rep}.truth.labels
-    #join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat sim${rep}.out | cut -f1,2 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > sim${rep}.truth.labels
 }
 
 get_clustering_score() {
@@ -80,7 +79,7 @@ run_umi-tools() {
 
 find_threshold() {
     rep=$1
-    cutoff=`echo "$umi_len*0.005" | bc -l`
+    cutoff=`echo "$umi_len*0.02" | bc -l`
     base_sim=`echo "$umi_len*0.5" | bc`
     i=0
     s0=0
@@ -157,8 +156,6 @@ for rep in `seq 1 $num_rep`; do
     bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f:",$1/a;printf "%3.3f:",$2/a;printf "%3.3f",$3/a}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
     
-    #n_collision=`cat sim${rep}.truth.labels | sort | uniq -c | awk '{print $2,$3,$1}' | awk '{if(a[$1]==""){a[$1]=$2" "$3}else{a[$1]=a[$1]" "$2" "$3}}END{for(i in a){print i,a[i]}}' | awk 'NF>3{n=0;for(i=2;i<NF;i+=2){n+=$(i+1)};print n}' | awk -v n=0 '{n+=$1}END{print n}'`
-    #r_collision=`echo "$n_collision/$total_reads" | bc -l`
 : <<'END'
 END
     if [ ! -f UMI-nea.sim${rep}.score ]; then

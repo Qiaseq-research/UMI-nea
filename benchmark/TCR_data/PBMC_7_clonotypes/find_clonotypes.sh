@@ -1,9 +1,11 @@
+code=$(readlink -f $0)
+code_dir=`dirname $code`
 echo -e "platform\tcondition\treplicate\tclonotype\tnumber of UMI" > umi_count_7_clonotypes.txt
-for clono in `cat 7_clonotypes_truth.txt`; do
+for clono in `cat $code_dir/7_clonotypes_truth.txt`; do
     for p in "230117_VH01211_6_AAC7YLMM5" "M06463_0121new"; do
         for f in `ls -1q $p/*/*-TCR.clonotypes.new.txt`; do
             s=`basename $f | cut -d"-" -f1`
-            cond=`cat library.txt | grep $s | cut -f2,3 | sed 's/ /_/'`
+            cond=`cat $code_dir/library.txt | grep $s | cut -f2,3 | sed 's/ /_/'`
             gene=`echo $clono | cut -d":" -f1`
             v=`echo $clono | cut -d":" -f2`
             j=`echo $clono | cut -d":" -f4`
