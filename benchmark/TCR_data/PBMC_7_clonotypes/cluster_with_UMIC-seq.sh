@@ -1,4 +1,3 @@
-#docker run --name umi_nea -it -v ${PWD}:/home/qiauser -v ~/support/Song/TCR_V3/PBMC_reproducibility/M06463_0121new/:/data -v /mnt/fdkbio10/home/zhangj/code/UMI-nea-publication/:/code/ -w /home/qiauser qiaseqresearch/umi-nea:latest
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 gene_lst="A B D G"
