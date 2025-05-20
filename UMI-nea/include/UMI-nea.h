@@ -29,7 +29,7 @@ typedef struct {
 	int pool_size;
 	int max_umi_len;
 	int min_read_founder;
-	bool first_founder_mode;
+	bool greedy_mode;
 	int verbose=1;
 	string primer_id;
 }UMI_clustering_parameters;
