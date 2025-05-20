@@ -3,11 +3,14 @@ docker-compose build --no-cache
 
 To start a interactive docker container:
 docker run -it  --name <umi-nea-container-name> umi-nea
+
 To start a detached docker container running UMI-nea
+
 docker run -d -v <data>:/home/UMI-nea/data --name <umi-nea-container-name>  umi-nea bash -c "/home/UMI-nea/UMI-nea/UMI-nea -i /home/UMI-nea/data/<input-file> -l <max-length>  -e <error_rate> -t <threads> -o  /home/UMI-nea/data/<output-file> 2> /home/UMI-nea/data/umi-nea.error.txt"
 
 To run UMI-nea for UMI clustering and quantification, ie. for most users :
 ./UMI-nea -l <max-umi-len> -i <input-file> -e <error_rate> -t <threads>
+
 To run UMI-nea only for quantification based on input file, ie. for most users :
 ./UMI-nea -i  <input-file> -j
 
