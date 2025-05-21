@@ -29,8 +29,6 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
             join -1 2 -2 1 <(cat $sample/umi_clustering.consensus.input | awk -v p=$p '$1==p' | cut -f1-5,8- | sort -k2,2) <(cat $sample/TR$i.grouped.rpu$rpu_cutoff.tsv | sed 's/_/\t/' | cut -f1,3 | sort -k1,1) | awk -v OFS="\t" '{print $2,$1,$3,$4,$5,$8,$2,$6,$7}' | sort -k6,6 > $sample/umi.clustered.consensus.TR$i
             rm -rf $sample/$sample.$p.*.fastq
         done
-        break
     done
     cd ../
-    break
 done
