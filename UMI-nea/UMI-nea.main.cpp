@@ -35,8 +35,7 @@ int max_umi_len=-1;
 float error_rate=0.001;
 bool set_error=false;
 bool greedy_mode=false; //quick search mode, once founder found, immediately stop search,  no need to find the low distance founder, good enough for low sequencing error generated UMIs because -m will be small
-//float nb_lowertail_p=0.001;
-float nb_lowertail_p=0.05;
+float nb_lowertail_p=0.001;
 int madfolds=3;
 
 void PrintHelp_one_line(string p, string m){
