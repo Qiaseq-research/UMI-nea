@@ -171,7 +171,8 @@ for rep in `seq 1 $num_rep`; do
     bp_idl=`echo "$bp_ins+$bp_del" | bc`
     bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f:",$1/a;printf "%3.3f:",$2/a;printf "%3.3f",$3/a}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
-    
+    thread=48
+
 : <<'END'
 END
     if [ ! -f UMI-nea.sim${rep}.score ]; then
@@ -199,7 +200,6 @@ END
             rpu_cutoff="NA"
             rpu_model="NA"
             est_mol="NA"
-            thread=48
         else
             if [ $eval_t != "UMIC-seq" ]; then
                 runtime_t=`cat $eval_t.time | grep -A 2 "$name $rep" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
@@ -228,7 +228,6 @@ END
                 thread=8
             fi
         fi
-        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist 48 $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
+        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $thread $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
     done
 done
-
