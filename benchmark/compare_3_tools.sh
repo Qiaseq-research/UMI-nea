@@ -4,11 +4,12 @@ acc=$2 # accuracy
 pN=$3 # number of founder
 oN=$4 # number of offspring
 num_rep=$5 # number of replicates
-dist=$6 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
+dist=$6 # edit distance for umi-tools
 umic_threshold=$7 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
-mut_ratio=$8 # ins-del-sub
-p1_ratio=$9 # var/mean ratio for number of children simulation with negative bionmial distribution
-run_umi_nea_only=${10} # only run UMI-nea
+thread=$8 # number of thread
+mut_ratio=$9 # ins-del-sub
+p1_ratio=${10} # var/mean ratio for number of children simulation with negative bionmial distribution
+tools_to_run=${11} # tools to run UMI-nea,umi-tools,UMIC-seq,calib
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
@@ -40,53 +41,56 @@ get_clustering_score() {
 
 run_UMI-nea() {
     rep=$1
+    td=$2
     mkdir -p UMI-nea
-    if [ ! -f UMI-nea/sim${rep}.labels ]; then
-        cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > UMI-nea/sim${rep}.input
-        maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
-        echo "$name $rep UMI-nea" >> UMI-nea.time
-        if [ $dist -gt 0 ]; then
-            echo "err is $dist"
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 48 -m $dist -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
-        else
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.clustered -l $maxl -t 48 -e $err_rate -a >> log/UMI-nea.sim${rep}.log"; } 2>> UMI-nea.time
+    if [ ! -f UMI-nea/sim${rep}.t$td.labels ]; then
+        if [ ! -f UMI-nea/sim${rep}.input ]; then
+            cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > UMI-nea/sim${rep}.input
         fi
-        join <(cat UMI-nea/sim${rep}.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.labels
-        get_clustering_score UMI-nea/sim${rep}.labels sim${rep}.truth.labels UMI-nea.sim${rep}.score
+        maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
+        echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
+        { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+        if [ $dist -eq 0 ]; then
+            dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
+        fi
+        join <(cat UMI-nea/sim${rep}.t$td.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.t$td.labels
+        get_clustering_score UMI-nea/sim${rep}.t$td.labels sim${rep}.truth.labels UMI-nea.sim${rep}.t$td.score
     fi
 }
 
 run_umi-tools() {
     rep=$1
+    td=$2
     mkdir -p umi-tools
-    if [ ! -f umi-tools/sim${rep}.labels ]; then
-        cat sim${rep}.out | cut -f1 | awk -v r="$rdn" -v s="$seq" -v q="$qlt" '{print r":c"NR"_"$1"\n"s"\n""+""\n"q}' > umi-tools/sim${rep}.fastq
-        bwa mem -t 72 -k 10 -L 0 -B 1 -O 1 -T 18 $code_dir/refgenome/ref.fa umi-tools/sim${rep}.fastq 2> log/umi-tools.bwa.log | samtools view -Sb - 1> umi-tools/sim${rep}.bam
-        samtools sort umi-tools/sim${rep}.bam -o umi-tools/sim${rep}.srt.bam
-        samtools index umi-tools/sim${rep}.srt.bam
-        echo "$name $rep umi-tools" >> umi-tools.time
-    if [ $dist -eq 0 ]; then
-        maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
-    else
-        maxdist=$dist
-    fi
-        { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$maxdist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.log --method=adjacency"; } 2>> umi-tools.time
-        if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
-            join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.labels
+    if [ ! -f umi-tools/sim${rep}.t$td.labels ]; then
+        if [ ! -f umi-tools/sim${rep}.srt.bam.bai ]; then
+            cat sim${rep}.out | cut -f1 | awk -v r="$rdn" -v s="$seq" -v q="$qlt" '{print r":c"NR"_"$1"\n"s"\n""+""\n"q}' > umi-tools/sim${rep}.fastq
+            bwa mem -t 72 -k 10 -L 0 -B 1 -O 1 -T 18 $code_dir/refgenome/ref.fa umi-tools/sim${rep}.fastq 2> log/umi-tools.bwa.log | samtools view -Sb - 1> umi-tools/sim${rep}.bam
+            samtools sort umi-tools/sim${rep}.bam -o umi-tools/sim${rep}.srt.bam
+            samtools index umi-tools/sim${rep}.srt.bam
         fi
-        get_clustering_score umi-tools/sim${rep}.labels sim${rep}.truth.labels umi-tools.sim${rep}.score
+        if [ $dist -gt 0 ]; then
+            ed=$dist
+        fi
+        echo "$name r=$rep t=$td umi-tools" >> umi-tools.time 
+        { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$ed --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log --method=adjacency"; } 2>> umi-tools.time
+        if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
+            join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
+        fi
+        get_clustering_score umi-tools/sim${rep}.t$td.labels sim${rep}.truth.labels umi-tools.sim${rep}.t$td.score
     fi
 }
 
 find_threshold() {
     rep=$1
+    td=$2
     cutoff=`echo "$umi_len*0.02" | bc -l`
     base_sim=`echo "$umi_len*0.5" | bc`
     i=0
     s0=0
     t0=0
     gt=0
-    cat UMIC-seq/sim${rep}.clustertest | grep "Threshold" | cut -d" " -f 2,5 | sed 's/://g' | while read a; do
+    cat UMIC-seq/sim${rep}.t$td.clustertest | grep "Threshold" | cut -d" " -f 2,5 | sed 's/://g' | while read a; do
         t=`echo $a | cut -d" " -f1`
         s=`echo $a | cut -d" " -f2`
         if [ $i -gt 0 ]; then
@@ -104,8 +108,9 @@ find_threshold() {
 
 run_UMIC-seq() {
     rep=$1
+    td=$2
     mkdir -p UMIC-seq
-    if [ ! -f UMIC-seq/sim${rep}.clustertest ]; then
+    if [ ! -f UMIC-seq/sim${rep}.t$td.clustertest ]; then
         cat sim${rep}.out | cut -f1 | awk -v r="$rdn" '{print r":c"NR"_"$1"\n"$1}' | sed 's/^@/>/g' > UMIC-seq/sim${rep}.fa
         cat sim${rep}.out | cut -f1 | awk -v r="$rdn" -v s="$seq" -v q="$qlt" '{print r":c"NR"_"$1"\n"s"\n""+""\n"q}' > UMIC-seq/sim${rep}.fastq
         s=20
@@ -115,43 +120,46 @@ run_UMIC-seq() {
             e=25
         fi
         gt=$s
-        echo "$name $rep UMIC-seq" >> UMIC-seq.time
-        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 48 clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --steps $s $e 1 > log/UMIC-seq.sim${rep}.clustertest.log 2>&1"; } 2>> UMIC-seq.time
+        echo "$name r=$rep t=$td UMIC-seq" >> UMIC-seq.time
+        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T $td clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep}.t$td --steps $s $e 1 > log/UMIC-seq.sim${rep}t$td.clustertest.log 2>&1"; } 2>> UMIC-seq.time
     fi
-    if [ ! -f UMIC-seq/sim${rep}.labels ]; then
+    if [ ! -f UMIC-seq/sim${rep}.t$td.labels ]; then
         if [ $umic_threshold -eq 0 ]; then
-            find_threshold $rep
+            find_threshold $rep $td
             gt=$?
         else
             gt=$umic_threshold
         fi
-        echo "Threshold is $gt" > log/UMIC-seq.sim${rep}.log
-        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T 48 clusterfull -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep} --reads UMIC-seq/sim${rep}.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> log/UMIC-seq.sim${rep}.log 2>&1"; } 2>> UMIC-seq.time
-        for i in UMIC-seq/sim${rep}/cluster_*.fasta; do
+        echo "Threshold is $gt" > log/UMIC-seq.sim${rep}.t$td.log
+        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T $td clusterfull -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep}.t$td --reads UMIC-seq/sim${rep}.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> log/UMIC-seq.sim${rep}.t$td.log 2>&1"; } 2>> UMIC-seq.time
+        for i in UMIC-seq/sim${rep}.t$td/cluster_*.fasta; do
             c=`echo $i | cut -d/ -f3 | cut -d_ -f2 | cut -d. -f1`
-            cat $i | grep ">" | awk -v clst=$c '{split($1,n,"_"); print n[2],clst}' >> UMIC-seq/sim${rep}.labels
+            cat $i | grep ">" | awk -v clst=$c '{split($1,n,"_"); print n[2],clst}' >> UMIC-seq/sim${rep}.t$td.labels
         done
-        cat UMIC-seq/sim${rep}.labels | sort -k1,1 > t && mv t UMIC-seq/sim${rep}.labels
-        get_clustering_score UMIC-seq/sim${rep}.labels sim${rep}.truth.labels UMIC-seq.sim${rep}.score
+        cat UMIC-seq/sim${rep}.t$td.labels | sort -k1,1 > t && mv t UMIC-seq/sim${rep}.t$td.labels
+        get_clustering_score UMIC-seq/sim${rep}.t$td.labels sim${rep}.truth.labels UMIC-seq.sim${rep}.t$td.score
     fi
 }
 
 run_calib() {
     rep=$1
+    td=$2
     mkdir -p calib/
-    if [ ! -f calib/sim${rep}.labels ]; then
+    if [ ! -f calib/sim${rep}.t$td.labels ]; then
         seq150=${seq:0:150}
         seq150_rc=`echo $seq150 | rev | tr ACGT TGCA`
-        echo "$name $rep umi-tools" >> calib.time
+        echo "$name r=$rep t=$td calib" >> calib.time
         cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
         cat sim${rep}.out | awk -v seq=$seq150_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
-        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}. -c 8 1> log/calib.sim${rep}.log 2>&1"; } 2>> calib.time
-        cat calib/sim${rep}.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.labels
-        get_clustering_score calib/sim${rep}.labels sim${rep}.truth.labels calib.sim${rep}.score
+        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}.t$td. -c $td 1> log/calib.sim${rep}.t$td.log 2>&1"; } 2>> calib.time
+        cat calib/sim${rep}.t$td.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.t$td.labels
+        get_clustering_score calib/sim${rep}.t$td.labels sim${rep}.truth.labels calib.sim${rep}.t$td.score
     fi
 }
 
-echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool dist thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
+if [ ! -f performance.txt ]; then
+    echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool dist thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
+fi
 for rep in `seq 1 $num_rep`; do
     if [ ! -f sim${rep}.truth.labels ]; then
         simulate_umi $rep
@@ -171,63 +179,50 @@ for rep in `seq 1 $num_rep`; do
     bp_idl=`echo "$bp_ins+$bp_del" | bc`
     bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f:",$1/a;printf "%3.3f:",$2/a;printf "%3.3f",$3/a}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
-    thread=48
 
 : <<'END'
 END
-    if [ ! -f UMI-nea.sim${rep}.score ]; then
-        run_UMI-nea $rep
-    fi
-    if [ $run_umi_nea_only -eq 0 ]; then
-        if [ ! -f umi-tools.sim${rep}.score ]; then
-            run_umi-tools $rep
-        fi
-
-        if [ ! -f UMIC-seq.sim${rep}.score ]; then
-            run_UMIC-seq $rep
-        fi
-        if [ ! -f calib.sim${rep}.score ]; then
-            run_calib $rep
-        fi
-    fi
-    for eval_t in "UMI-nea" "umi-tools" "UMIC-seq" "calib"; do
-        if [ ! -f $eval_t.sim${rep}.score ]; then
-            runtime_t="NA"
-            score_v="NA"
-            score_h="NA"
-            score_c="NA"
-            n_cluster="NA"
-            rpu_cutoff="NA"
-            rpu_model="NA"
-            est_mol="NA"
+    for eval_t in `echo $tools_to_run | sed 's/,/\n/g'`; do
+        if [ $eval_t == "umi-tools" ]; then
+            td=1
         else
-            if [ $eval_t != "UMIC-seq" ]; then
-                runtime_t=`cat $eval_t.time | grep -A 2 "$name $rep" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
-                maxdist=`cat log/UMI-nea.sim${rep}.log | grep "maxdist" | awk '{print $NF}'`
-            else
-                runtime_t=`cat $eval_t.time | grep -A 6 "$name $rep" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{print int(n)}'`
-                maxdist=`cat log/$eval_t.sim${rep}.log | head -1 | awk '{print $3}'`
-            fi
-            score_v=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$NF}'`
-            score_h=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$4}'`
-            score_c=`cat $eval_t.sim${rep}.score | awk '{printf "%.4f\n",$7}'`
-            n_cluster=`cat $eval_t/sim${rep}.labels | cut -d" " -f2 | sort -u | wc -l`
-            if [ $eval_t == "UMI-nea" ]; then
-                rpu_cutoff=`cat $eval_t/sim${rep}.clustered.estimate | head -3 | tail -1 | awk '{print $NF}'`
-                rpu_model=`cat $eval_t/sim${rep}.clustered.estimate | head -1 | awk '{print ($1~/NB/?"negbinom":"kneeplot")}'`
-                est_mol=`cat $eval_t/sim${rep}.clustered.estimate | tail -1 | awk '{print $NF}'`
-            else
-                rpu_cutoff="NA"
-                rpu_model="NA"
-                est_mol=$n_cluster
-            fi
-            if [ $eval_t == "umi-tools" ]; then
-                thread=1
-            fi
-            if [ $eval_t == "calib" ]; then
-                thread=8
-            fi
+            td=$thread
         fi
-        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $thread $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
+        scoref=$eval_t.sim${rep}.t$td.score
+        if [ ! -f $scoref ]; then
+            run_${eval_t} $rep $td
+        fi
+        runtime_t="NA"
+        rpu_cutoff="NA"
+        rpu_model="NA"
+        score_v=`if [ -f $scoref ]; then cat $scoref | awk '{printf "%.4f\n",$NF}'; else echo "NA"; fi`
+        score_h=`if [ -f $scoref ]; then cat $scoref | awk '{printf "%.4f\n",$4}'; else echo "NA"; fi`
+        score_c=`if [ -f $scoref ]; then cat $scoref | awk '{printf "%.4f\n",$7}'; else echo "NA"; fi`
+        n_cluster=`cat $eval_t/sim${rep}.t$td.labels | cut -d" " -f2 | sort -u | wc -l`
+        est_mol=$n_cluster
+        case $eval_t in
+        UMIC-seq)
+            runtime_t=`cat $eval_t.time | grep -A 6 "$name r=$rep t=$td" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{print int(n)}'`
+            maxdist=`cat log/$eval_t.sim${rep}.t$td.log | head -1 | awk '{print $3}'`
+            ;;
+        calib)
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "error_tolerance" | head -1 | awk '{print $2}'`
+            ;;
+        umi-tools)
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "# threshold" | awk '{print $4}'`
+            ;;
+        UMI-nea)
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
+            rpu_cutoff=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -3 | tail -1 | awk '{print $NF}'`
+            rpu_model=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -1 | awk '{print ($1~/NB/?"negbinom":"kneeplot")}'`
+            est_mol=`cat $eval_t/sim${rep}.t$td.clustered.estimate | tail -1 | awk '{print $NF}'`
+            ;;
+        *)
+            echo "invalid tool"
+        esac        
+        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $td $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
     done
 done
