@@ -136,6 +136,21 @@ run_UMIC-seq() {
     fi
 }
 
+run_calib() {
+    rep=$1
+    mkdir -p calib/
+    if [ ! -f calib/sim${rep}.labels ]; then
+        seq150=${seq:0:150}
+        seq150_rc=`echo $seq150 | rev | tr ACGT TGCA`
+        echo "$name $rep umi-tools" >> calib.time
+        cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
+        cat sim${rep}.out | awk -v seq=$seq_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
+        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}. -c 8 1 > log/calib.sim${rep}.log 2>&1"; } 2>> calib.time
+        cat calib/sim${rep}.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l]"\t"$1}' | sort -k1,1 > calib/sim${rep}.labels
+        get_clustering_score calib/sim${rep}.labels sim${rep}.truth.labels calib.sim${rep}.score
+    fi
+}
+
 echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool dist thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
 for rep in `seq 1 $num_rep`; do
     if [ ! -f sim${rep}.truth.labels ]; then
@@ -170,8 +185,11 @@ END
         if [ ! -f UMIC-seq.sim${rep}.score ]; then
             run_UMIC-seq $rep
         fi
+        if [ ! -f calib.sim${rep}.score ]; then
+            run_calib $rep
+        fi
     fi
-    for eval_t in "UMI-nea" "umi-tools" "UMIC-seq"; do
+    for eval_t in "UMI-nea" "umi-tools" "UMIC-seq" "calib"; do
         if [ ! -f $eval_t.sim${rep}.score ]; then
             runtime_t="NA"
             score_v="NA"
