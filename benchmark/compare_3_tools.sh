@@ -8,7 +8,7 @@ dist=$6 # use UMI-nea -e to infer dist set dist to 0 else input calculated dist
 umic_threshold=$7 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
 mut_ratio=$8 # ins-del-sub
 p1_ratio=$9 # var/mean ratio for number of children simulation with negative bionmial distribution
-run_umi_nea_only=$9 # only run UMI-nea
+run_umi_nea_only=${10} # only run UMI-nea
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
@@ -144,9 +144,9 @@ run_calib() {
         seq150_rc=`echo $seq150 | rev | tr ACGT TGCA`
         echo "$name $rep umi-tools" >> calib.time
         cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
-        cat sim${rep}.out | awk -v seq=$seq_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
-        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}. -c 8 1 > log/calib.sim${rep}.log 2>&1"; } 2>> calib.time
-        cat calib/sim${rep}.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l]"\t"$1}' | sort -k1,1 > calib/sim${rep}.labels
+        cat sim${rep}.out | awk -v seq=$seq150_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
+        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}. -c 8 1> log/calib.sim${rep}.log 2>&1"; } 2>> calib.time
+        cat calib/sim${rep}.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.labels
         get_clustering_score calib/sim${rep}.labels sim${rep}.truth.labels calib.sim${rep}.score
     fi
 }
@@ -199,6 +199,7 @@ END
             rpu_cutoff="NA"
             rpu_model="NA"
             est_mol="NA"
+            thread=48
         else
             if [ $eval_t != "UMIC-seq" ]; then
                 runtime_t=`cat $eval_t.time | grep -A 2 "$name $rep" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
@@ -219,6 +220,12 @@ END
                 rpu_cutoff="NA"
                 rpu_model="NA"
                 est_mol=$n_cluster
+            fi
+            if [ $eval_t == "umi-tools" ]; then
+                thread=1
+            fi
+            if [ $eval_t == "calib" ]; then
+                thread=8
             fi
         fi
         echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist 48 $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
