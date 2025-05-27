@@ -149,8 +149,10 @@ run_calib() {
         seq150=${seq:0:150}
         seq150_rc=`echo $seq150 | rev | tr ACGT TGCA`
         echo "$name r=$rep t=$td calib" >> calib.time
-        cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
-        cat sim${rep}.out | awk -v seq=$seq150_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
+        if [ ! -f calib/sim${rep}.R1.fastq ] || [ ! -f calib/sim${rep}.R2.fastq ]; then
+            cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
+            cat sim${rep}.out | awk -v seq=$seq150_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
+        fi
         { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}.t$td. -c $td 1> log/calib.sim${rep}.t$td.log 2>&1"; } 2>> calib.time
         cat calib/sim${rep}.t$td.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.t$td.labels
         get_clustering_score calib/sim${rep}.t$td.labels sim${rep}.truth.labels calib.sim${rep}.t$td.score
