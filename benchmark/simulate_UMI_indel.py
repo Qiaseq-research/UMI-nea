@@ -16,12 +16,12 @@ def sample_umi(l):
     return umi
 
 def generate_Mut(c, do_indel, ratio):
-    # ratio = [1(ins),n1(del),n2(sub)]
+    # ratio = [(ins),n1(del),n2(sub)]
     if do_indel:
-        bases = ["G"+c, "A"+c, "T"+c, "C"+c] * 3
+        bases = ["G"+c, "A"+c, "T"+c, "C"+c] * 3 * ratio[0]
         bases += [''] * 12 * ratio[1]
         for b in re.findall('[A-Z]', "GATC".replace(c, '')):
-            bases += [b] * int(4*ratio[2]+0.5)
+            bases += [b] * 4 * ratio[2]
         #print(len(bases),bases)
     else:
         bases = re.findall('[A-Z]', "GATC".replace(c, ''))
@@ -141,6 +141,6 @@ pN = sys.argv[4]
 oN = sys.argv[5]
 do_indel = bool(int(sys.argv[6]))
 mut_ratio = [int(x) for x in sys.argv[7].split("-")]
-p1 = int(sys.argv[8])
+p1 = float(sys.argv[8])
 #generate_Mut("A", do_indel, mut_ratio)
 sim_UMI(simf, umi_len, acc, pN, oN, do_indel, mut_ratio, p1)

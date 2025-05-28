@@ -1,20 +1,23 @@
-# bash /code/compare_3_tools.sh 20 0.995 1000 20 0 1 0
 umi_len=$1 # umi length
 acc=$2 # accuracy
 pN=$3 # number of founder
 oN=$4 # number of offspring
 num_rep=$5 # number of replicates
-dist=$6 # edit distance for umi-tools
-umic_threshold=$7 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
-thread=$8 # number of thread
-mut_ratio=$9 # ins-del-sub
-p1_ratio=${10} # var/mean ratio for number of children simulation with negative bionmial distribution
-tools_to_run=${11} # tools to run UMI-nea,umi-tools,UMIC-seq,calib
+do_indel=$6 # 1 for simulate umi seq with indels 0 for no indel
+mut_ratio=$7 # ratio of ins-del-sub
+dist=$8 # edit distance for umi-tools
+umic_threshold=$9 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
+thread=${10} # number of thread
+p1_ratio=${11} # var/mean ratio for number of children simulation with negative bionmial distribution
+tools_to_run=${12} # tools to run UMI-nea,umi-tools,UMIC-seq,calib
 code=$(readlink -f $0)
 code_dir=`dirname $code`
 name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
 err_rate=`echo $acc | awk '{printf "%1.3f\n",(1-$1)}'`
 time_lim=86400s # time limit for each tools
+
+echo -e "simulation\numi_len=$umi_len\nacc=$acc\nnum_founder=$pN\nnum_children=$oN\nnum_replicate=$num_rep\ndo_indel=$do_indel\nratio=$mut_ratio\n UMI-nea&umi-tools_threshold=$dist\nUMIC-seq_threshold=$umic_threshold\n num_thread=$thread\nvar/mean_ratio=$p1_ratio\nevaluate_tools=$tools_to_run"
+
 mkdir -p $name/log
 cd $name
 
@@ -24,7 +27,7 @@ rdn="@M01750:63:000000000-KLHVC:1:1101:18381:1596"
 
 simulate_umi() {
     rep=$1
-    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN 1 $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
+    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN $do_indel $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
     cat sim${rep}.truth.labels | sort -k1,1 -k2,2n > sim.l && mv sim.l sim${rep}.truth.labels
 }
 
@@ -204,19 +207,19 @@ END
         est_mol=$n_cluster
         case $eval_t in
         UMIC-seq)
-            runtime_t=`cat $eval_t.time | grep -A 6 "$name r=$rep t=$td" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{print int(n)}'`
+            runtime_t=`cat $eval_t.time | grep -A 6 "$name r=$rep t=$td" | awk 'NR==3 || NR==7{print $2}' | awk -v n=0 '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1]}END{printf "%.2f\n",n}'`
             maxdist=`cat log/$eval_t.sim${rep}.t$td.log | head -1 | awk '{print $3}'`
             ;;
         calib)
-            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];printf "%.2f\n",n}'`
             maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "error_tolerance" | head -1 | awk '{print $2}'`
             ;;
         umi-tools)
-            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];printf "%.2f\n",n}'`
             maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "# threshold" | awk '{print $4}'`
             ;;
         UMI-nea)
-            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];print int(n)}'`
+            runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];printf "%.2f\n",n}'`
             maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
             rpu_cutoff=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -3 | tail -1 | awk '{print $NF}'`
             rpu_model=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -1 | awk '{print ($1~/NB/?"negbinom":"kneeplot")}'`
