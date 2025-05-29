@@ -69,22 +69,22 @@ UMI-nea -i <input-file> -l <max-length> -o <output-file>
 
 `<fname>.input`: A tab separated file with number of read for each unique UMI sequence
 
-| primer_group_num(For TCR/BCR, default use 1) | Unique UMI sequence | number of reads |
-|:--------------------------------------------:|:-------------------:|:---------------:|
+| Amplicon_ID | Unique UMI sequence | number of reads |
+|:-----------:|:-------------------:|:---------------:|
 
 #### Clustering output
 
 `<fname>`: A tab separated file with error corrected founder for each UMI sequences with below columns
 
-| primer_group_num(For TCR/BCR, default use 1) | original UMI sequence | error corrected UMI sequence |
-|:--------------------------------------------:|:---------------------:|:----------------------------:|
+| Amplicon_ID | original UMI sequence | error corrected UMI sequence |
+|:-----------:|:---------------------:|:----------------------------:|
 
 `<fname>.estimate`: Model estimated number of molecules from UMI clustering reuslt
 
 `<fname>.umi.reads.count`: A tab separated file with cluster size of each error corrected founder
 
-| primer_group_num(For TCR/BCR, default use 1) | error corrected  UMI sequence | number of reads |
-|:--------------------------------------------:|:-----------------------------:|:---------------:|
+| Amplicon_ID | error corrected UMI sequence | number of reads |
+|:-----------:|:----------------------------:|:---------------:|
 
 #### Example run
 
@@ -92,7 +92,7 @@ UMI-nea -i <input-file> -l <max-length> -o <output-file>
 ~/code/UMI-nea/UMI-nea/UMI-nea -i sim1.input -o sim1.clustered -l 19 -e 0.001
 ```
 
-### quantification
+### Quantification only
 
 To run UMI-nea quantification only:
 ```bash
