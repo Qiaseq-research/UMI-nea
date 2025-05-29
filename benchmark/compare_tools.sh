@@ -1,22 +1,21 @@
 umi_len=$1 # umi length
-acc=$2 # accuracy
+err_rate=$2 # error rate
 pN=$3 # number of founder
 oN=$4 # number of offspring
 num_rep=$5 # number of replicates
 do_indel=$6 # 1 for simulate umi seq with indels 0 for no indel
 mut_ratio=$7 # ratio of ins-del-sub
-dist=$8 # edit distance for umi-tools
+dist=$8 # edit distance for UMI-nea and umi-tools *
 umic_threshold=$9 # threhold number for UMIC-seq clustering; set to 0 for auto finding threhold
 thread=${10} # number of thread
 p1_ratio=${11} # var/mean ratio for number of children simulation with negative bionmial distribution
 tools_to_run=${12} # tools to run UMI-nea,umi-tools,UMIC-seq,calib
 code=$(readlink -f $0)
 code_dir=`dirname $code`
-name=sim_${pN}_${oN}_ul${umi_len}_acc${acc}
-err_rate=`echo $acc | awk '{printf "%1.3f\n",(1-$1)}'`
+name=sim_${pN}_${oN}_ul${umi_len}_err${err_rate}
 time_lim=86400s # time limit for each tools
 
-echo -e "simulation\numi_len=$umi_len\nacc=$acc\nnum_founder=$pN\nnum_children=$oN\nnum_replicate=$num_rep\ndo_indel=$do_indel\nratio=$mut_ratio\n UMI-nea&umi-tools_threshold=$dist\nUMIC-seq_threshold=$umic_threshold\n num_thread=$thread\nvar/mean_ratio=$p1_ratio\nevaluate_tools=$tools_to_run"
+echo -e "simulation\numi_len=$umi_len\nerr_rate=$err_rate\nnum_founder=$pN\nnum_children=$oN\nnum_replicate=$num_rep\ndo_indel=$do_indel\nratio=$mut_ratio\n UMI-nea&umi-tools_threshold=$dist\nUMIC-seq_threshold=$umic_threshold\n num_thread=$thread\nvar/mean_ratio=$p1_ratio\nevaluate_tools=$tools_to_run"
 
 mkdir -p $name/log
 cd $name
@@ -27,7 +26,7 @@ rdn="@M01750:63:000000000-KLHVC:1:1101:18381:1596"
 
 simulate_umi() {
     rep=$1
-    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $acc $pN $oN $do_indel $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
+    python $code_dir/simulate_UMI_indel.py sim${rep} $umi_len $err_rate $pN $oN $do_indel $mut_ratio $p1_ratio > log/simulate.sim${rep}.log
     cat sim${rep}.truth.labels | sort -k1,1 -k2,2n > sim.l && mv sim.l sim${rep}.truth.labels
 }
 
@@ -51,10 +50,12 @@ run_UMI-nea() {
             cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > UMI-nea/sim${rep}.input
         fi
         maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
-        echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
-        { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+        echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time        
         if [ $dist -eq 0 ]; then
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
             dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
+        else
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -d $dist -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
         fi
         join <(cat UMI-nea/sim${rep}.t$td.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.t$td.labels
         get_clustering_score UMI-nea/sim${rep}.t$td.labels sim${rep}.truth.labels UMI-nea.sim${rep}.t$td.score
@@ -73,12 +74,13 @@ run_umi-tools() {
             samtools index umi-tools/sim${rep}.srt.bam
         fi
         if [ $dist -gt 0 ]; then
-            ed=$dist
-        fi
-        echo "$name r=$rep t=$td umi-tools" >> umi-tools.time 
-        { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$ed --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log --method=adjacency"; } 2>> umi-tools.time
-        if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
-            join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
+            echo "$name r=$rep t=$td umi-tools" >> umi-tools.time 
+            { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log --method=adjacency"; } 2>> umi-tools.time
+            if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
+                join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
+            fi
+        else
+            echo "Distance value cannot be 0 !"
         fi
         get_clustering_score umi-tools/sim${rep}.t$td.labels sim${rep}.truth.labels umi-tools.sim${rep}.t$td.score
     fi
