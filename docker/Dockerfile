@@ -24,4 +24,7 @@ RUN cd UMI-nea/UMI-nea && make
 RUN git clone https://github.com/fhlab/UMIC-seq.git
 COPY UMIC-seq.py UMIC-seq/
 
+RUN git clone -b v0.3.4 https://github.com/vpc-ccg/calib.git calib
+RUN cd calib && make
+
 CMD ["/bin/bash"]

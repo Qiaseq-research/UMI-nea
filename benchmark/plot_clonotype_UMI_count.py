@@ -28,6 +28,12 @@ for i in range(len(clono)):
     for j in range(len(plfm)):
         p = plfm[j]
         dfc1 = dfc[(dfc["clonotype"]==cl) & (dfc["platform"]==p)]
+        if max(dfc1["log10(number of UMI)"]) > 4:
+            ymax = 5
+        else:
+            ymax = 4
+        y_ticks = [x for x in range(ymax+1)]
+        y_ticklabels = [10**x for x in range(ymax+1)]
         sns.lineplot(ax=axes[j,i],x=dfc1["condition"],y=dfc1["log10(number of UMI)"],
                      hue=dfc1["replicate"],marker='o', palette=sns.color_palette("mako_r", 2))
         if i == len(clono)-1:
@@ -46,8 +52,8 @@ for i in range(len(clono)):
             axes[j,i].text(cd1[k], lg1[k], numi[k], va=v, ha=h, fontsize=16)
         axes[j,i].get_legend().remove()
         axes[j,i].set_ylim(-0.1,4)
-        axes[j,i].set_yticks([0,1,2,3,4])
-        axes[j,i].set_yticklabels([1,10,100,1000,10000], fontsize=12)
+        axes[j,i].set_yticks(y_ticks)
+        axes[j,i].set_yticklabels(y_ticklabels, fontsize=12)
         axes[j,i].set_ylabel("number of UMI", fontsize=14)
         axes[j,i].set_xlim(-0.1,3.1)
         axes[j,i].set_xticks([0,1,2,3])
