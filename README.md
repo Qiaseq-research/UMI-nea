@@ -25,9 +25,9 @@ To pull docker image of umi-nea
 ```bash
 docker pull qiaseqresearch/umi-nea:latest
 ```
-To start a interactive docker container:
+To run UMI-nea in docker container:
 ```bash
-docker run -it --name <umi-nea-container-name> qiaseqresearch/umi-nea:latest
+docker run --name <umi-nea-container-name> qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea
 ```
 
 ## Run UMI-nea
