@@ -11,7 +11,8 @@ UMI-nea has two ways to install. You can install UMI-nea directly through source
 ### From source code
 
 prerequisite
-    1. ...
+1. c++14
+2. boost library
 
 ```bash
 git clone https://github.com/Qiaseq-research/UMI-nea.git
