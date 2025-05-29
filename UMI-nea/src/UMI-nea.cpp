@@ -8,7 +8,7 @@ guardedvector founders;
 bool producer_done=false;
 const int N_num=3;
 const string padding(N_num, 'N');
-bool verbose=true;
+bool verbose=false;
 
 double mean(const vector<int> v)
 {
@@ -70,7 +70,7 @@ int calculate_dist_upper_bound_old(float error_rate, int max_umi_len){
 	    default:
 		  z=1.96;
       }
-      float dist_upper_bound=max_umi_len*error_rate+z*sqrt(error_rate*(1-error_rate)*max_umi_len ) ; 
+      float dist_upper_bound=max_umi_len*error_rate+z*sqrt(error_rate*(1-error_rate)*max_umi_len ) ;
       upper_ceil=ceil(dist_upper_bound);
       upper_floor=floor(dist_upper_bound);
       if (max_umi_len<=20)
@@ -121,14 +121,13 @@ int calculate_dist_upper_bound(float error_rate, int max_umi_len){
 	      cout<<"add_dist_upper_bound="<<add_dist_upper_bound<<" ceil="<<upper_ceil<<" floor="<<upper_floor<<" round="<<upper_round<<endl;
       int dist_upper_bound;
       if  (max_umi_len<=15)
-	      dist_upper_bound=min_dist+upper_floor;	
-      else 	     
+	      dist_upper_bound=min_dist+upper_floor;
+      else
 	      dist_upper_bound=min_dist+upper_round;
       if (verbose)
 	      cout<<"Dist="<<dist_upper_bound<<endl;
       return dist_upper_bound;
 }
-
 
 int count_umi(const string filename){
 	int count=0;
@@ -306,17 +305,15 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
                 return;
       }
       //int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ;
-      int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ; 
+      int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ;
       if (lower_nb==0)
                 lower_nb=1; //observed UMI has at least one read
       sort (umi_data.begin(), umi_data.end());
       auto lower_bound_it = lower_bound(umi_data.begin(), umi_data.end(), lower_nb);
       vector<int> umi_filtered_data(lower_bound_it, umi_data.end()) ;
       min_read_founder=lower_nb;
-      nb_estimated_molecule=umi_filtered_data.size();	
+      nb_estimated_molecule=umi_filtered_data.size();
 }
-
-
 
 void fit_nb_model_old( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
       vector<int>  umi_data;
