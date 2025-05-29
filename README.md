@@ -15,7 +15,7 @@ prerequisite
 
 ```bash
 git clone https://github.com/Qiaseq-research/UMI-nea.git
-cd UMI-nea
+cd UMI-nea/UMI-nea
 make
 ```
 
@@ -27,7 +27,7 @@ docker pull qiaseqresearch/umi-nea:latest
 ```
 To start a interactive docker container:
 ```bash
-docker run -it  --name <umi-nea-container-name> umi-nea
+docker run -it --name <umi-nea-container-name> qiaseqresearch/umi-nea:latest
 ```
 
 ## Run UMI-nea
@@ -69,21 +69,21 @@ UMI-nea -i <input-file> -l <max-length> -o <output-file>
 `<fname>.input`: A tab separated file with number of read for each unique UMI sequence
 
 | primer_group_num(For TCR/BCR, default use 1) | Unique UMI sequence | number of reads |
-|----------------------------------------------|---------------------|-----------------|
+|:--------------------------------------------:|:-------------------:|:---------------:|
 
 #### Clustering output
 
 `<fname>`: A tab separated file with error corrected founder for each UMI sequences with below columns
 
 | primer_group_num(For TCR/BCR, default use 1) | original UMI sequence | error corrected UMI sequence |
-|----------------------------------------------|-----------------------|------------------------------|
+|:--------------------------------------------:|:---------------------:|:----------------------------:|
 
 `<fname>.estimate`: Model estimated number of molecules from UMI clustering reuslt
 
 `<fname>.umi.reads.count`: A tab separated file with cluster size of each error corrected founder
 
 | primer_group_num(For TCR/BCR, default use 1) | error corrected  UMI sequence | number of reads |
-|----------------------------------------------|-------------------------------|-----------------|
+|:--------------------------------------------:|:-----------------------------:|:---------------:|
 
 #### Example run
 
