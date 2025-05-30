@@ -89,8 +89,24 @@ UMI-nea -i <input-file> -l <max-length> -o <output-file>
 #### Example run
 
 ```bash
-~/code/UMI-nea/UMI-nea/UMI-nea -i sim1.input -o sim1.clustered -l 19 -e 0.001
+docker run --name umi_nea qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -o sim1.clustered -l 19 -e 0.001
 ```
+```
+
+********************Input Parameters:************************
+inFile=../test/pN1000_oN100/sim_1000_100_ul18_err0.001/UMI-nea/sim1.input
+outFile=sim1.clustered
+maxlenUMI = 19
+errorRate = 0.001
+maxdist = 1
+auto-Estimate = ON
+threads = 10
+poolSize = 1000
+********************************************
+
+All done!
+```
+
 
 ### Quantification only
 
@@ -102,17 +118,16 @@ UMI-nea -i <input-file> -j
 #### Example run
 
 ```bash
-~/code/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
+docker run --name umi_nea qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
 ```
 Output
 
 ```
-min angle=112 min_read_founder=1 min_read_founder_indices first=1022 min_read_founder_indices last=2750 the index of smallest angle is 1090
-we should make min_read_founder =2
 KP_estimate     ON
 knee_angle      113
 median_rpu      101
 rpu_cutoff      2
 estimated_molecules     1091
 after_rpu-cutoff_molecules      1022
+
 ```

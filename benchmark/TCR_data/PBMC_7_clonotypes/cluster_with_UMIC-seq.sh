@@ -29,7 +29,7 @@ find_threshold() {
     done
 }
 
-for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
+for run in "230117_VH01211_6_AAC7YLMM5"; do
     mkdir -p $run/
     cd $run
     cp /data/$run/runList.tsv .
@@ -48,11 +48,18 @@ for run in "M06463_0121new" "230117_VH01211_6_AAC7YLMM5"; do
                 rpu_cutoff=`cat /data/$run/$sample/umi.clustered.TR$i.estimate | grep "rpu_cutoff" | awk '{print $2}'`
             fi
             if [ ! -f $sample/$sample.$p.rpu$rpu_cutoff.cluster.reads ]; then
-                python /Download/UMIC-seq/UMIC-seq.py -T 48 clustertest -i $sample/$sample.$p.fa -o $sample/$sample.$p --steps 5 25 1 > $sample/log/UMIC-seq.$p.clustertest.log 2>&1
+                if [ $run == "230117_VH01211_6_AAC7YLMM5" ]; then
+                    mi_s=`tail -n+2 $code_dir/library.txt | awk -F"\t" -v ns=$sample '$NF==ns{print $(NF-1)}'`
+                    find_threshold ../M06463_0121new/$mi_s/$mi_s.$p.clustertest
+                    gt=$?
+                    gt=`echo "$gt-1" | bc`
+                fi
                 if [ $gt -eq 0 ]; then
+                    python /Download/UMIC-seq/UMIC-seq.py -T 48 clustertest -i $sample/$sample.$p.fa -o $sample/$sample.$p --steps 5 25 1 > $sample/log/UMIC-seq.$p.clustertest.log 2>&1
                     find_threshold $sample/$sample.$p.clustertest
                     gt=$?
                 fi
+                echo "Threshold is $gt" > $sample/log/UMIC-seq.$p.log
                 python /Download/UMIC-seq/UMIC-seq.py -T 48 clusterfull -i $sample/$sample.$p.fa -o $sample/$sample.$p --reads $sample/$sample.$p.fastq --aln_thresh $gt --size_thresh 1 --stop_thresh 1 >> $sample/log/UMIC-seq.$p.log 2>&1
                 for clt in `ls -1q $sample/$sample.$p/*.fasta`; do
                     rpu=`cat $clt | grep ">" | wc -l`
