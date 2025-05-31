@@ -19,7 +19,9 @@ string estimate_out_file;
 int max_dist=2;
 int num_thread=10;
 int pool_size=1000;
+int min_read_founder_user=1;
 int min_read_founder=1;
+bool user_set_min_read_founder=false;
 bool nb_estimate=false;
 bool kp_estimate=false;
 bool auto_estimate=true;
@@ -142,7 +144,8 @@ void ProcessArgs(int argc, char** argv)
 			set_error=true;
 			break;
 		  case 'f':
-			min_read_founder = atoi(optarg);
+			user_set_min_read_founder=true;
+			min_read_founder_user = atoi(optarg);
 			break;
 		  case 'n':
                         nb_estimate = true;
@@ -216,6 +219,10 @@ void capture_input_error(){
 		 cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"nb_lowertail_p="<<nb_lowertail_p<<", must set within [0,1]"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
 	}
+	if (min_read_founder_user<0){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"min_read_founder="<<min_read_founder<<", must bigger than 0"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+	}
 }
 
 int main(int argc, char **argv){
@@ -252,6 +259,8 @@ int main(int argc, char **argv){
 				cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<kp_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 		}
 	}
+	if (user_set_min_read_founder)
+                min_read_founder=min_read_founder_user;
 	if (!just_estimate)
 		PrintOptions();
 	else
