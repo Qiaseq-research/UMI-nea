@@ -86,8 +86,7 @@ void PrintOptions(){
 	if (auto_estimate)
                 cout << "auto-Estimate = ON" << endl;
 
-	if (!nb_estimate && !kp_estimate && !auto_estimate)
-		cout << "minReadsNumForFouner  = " << min_read_founder << endl;
+	cout << "min_ReadsPerUmi_founer  = " << min_read_founder << endl;
 
 	if (greedy_mode )
                 cout << "greedy_Mode = ON"<< endl;

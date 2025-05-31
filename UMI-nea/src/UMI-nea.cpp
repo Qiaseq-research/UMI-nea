@@ -300,7 +300,7 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
                 cout<<"\ndata_size="<<umi_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(umi_data)<<"\nVar="<<var(umi_data )<<endl;
 
       if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r very inaccurate, (found in some high input samples!) so just give UMI clustering results
-                min_read_founder=umi_data[0];
+                min_read_founder=umi_data[umi_data.size()-1];
                 nb_estimated_molecule=umi_data.size();
                 return;
       }
