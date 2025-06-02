@@ -21,8 +21,9 @@ dfc.to_csv("clonotype_umi_count.csv", index=False)
 dfc["condition"] = dfc["condition"].apply(lambda x: cond[x])
 conditions = list(cond.keys())
 conditions.sort()
-fig, axes = plt.subplots(2,len(clono), figsize = (5*len(clono),9), frameon=True)
+
 sns.set_style('whitegrid')
+fig, axes = plt.subplots(2,len(clono), figsize = (5*len(clono),9), frameon=True)
 for i in range(len(clono)):
     cl = i+1
     for j in range(len(plfm)):
@@ -46,10 +47,12 @@ for i in range(len(clono)):
             if r1[k] == "rep1":
                 v = 'top'
                 h = 'left'
+                tcl = '#348fa7'
             else:
                 v = 'bottom'
                 h = 'right'
-            axes[j,i].text(cd1[k], lg1[k], numi[k], va=v, ha=h, fontsize=16)
+                tcl = '#413d7b'
+            axes[j,i].text(cd1[k], lg1[k], numi[k], va=v, ha=h, fontsize=16, color=tcl)
         axes[j,i].get_legend().remove()
         axes[j,i].set_ylim(-0.1,4)
         axes[j,i].set_yticks(y_ticks)
@@ -65,7 +68,5 @@ for i in range(len(clono)):
         if i>0:
             axes[j,i].set_ylabel("")
 fig.tight_layout()
-fig.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.13,1), fontsize=14)
-fig.suptitle("Reproducibility of UMI count for 7 spiked-in clonotypes",fontsize=25)
-fig.subplots_adjust(top=0.85)
+fig.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.04,1), fontsize=16)
 fig.savefig("clonotype_umi_count.png", bbox_inches="tight")
