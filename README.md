@@ -39,7 +39,7 @@ There are two main usage of UMI-nea, one is do UMI clustering and quantification
 
 To run UMI-nea clustering with quantification:
 ```bash
-./UMI-nea -i <input-file> -l <max-length> -o <output-file> -e <error-rate> -a
+./UMI-nea -i <input-file> -l <max-length> -o <output-file> -e <error-rate>
 ```
 
 #### Clustering parameters
@@ -57,7 +57,7 @@ To run UMI-nea clustering with quantification:
 6. `--minF -f <int|default:1>`: Min reads count for a UMI to be founder, overruled by -a or -n or -k
 7. `--nb -n <default:false>`: Apply negative binomial model to decide min reads for a founder, override -f
 8. `--kp -k <default:false>`: Apply knee plot to decide min reads for a founder, override -f
-9. `--auto -a <default:false>`: Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f
+9. `--auto -a <default:true>`: Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f
 10. `--just -j <default:false>`: Just estimate molecule number and rpu cutoff
 11. `--prob -q <float|default:0.001>`: probability for nb lower tail quantile cutoff in quantification
 12. `--greedy -d <default:false>`: Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not recommended!
