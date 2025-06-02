@@ -165,13 +165,12 @@ run_calib() {
 }
 
 if [ ! -f performance.txt ]; then
-    echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion:deletion:substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion:deletion:substitution substitution_only_umi indel_umi uniq_umi tool clustering_threshold thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
+    echo "num_founder mean_children_num variance_children_num umi_len err_rate insertion-deletion-substitution replicate total_umi simulated_mean_children_num simulated_variance_children_num substitution_base indel_base simulated_insertion-deletion-substitution substitution_only_umi indel_umi uniq_umi tool clustering_threshold thread runtime_in_sec dedup_umi_cluster V-measure homogeneity_score completeness_score RPU_cutoff RPU_cutoff_model estimated_molecule" > performance.txt
 fi
 for rep in `seq 1 $num_rep`; do
     if [ ! -f sim${rep}.truth.labels ]; then
         simulate_umi $rep
     fi
-    input_ratio=`echo $mut_ratio | sed 's/-/:/g'`
     var_oN=`echo "$oN*$p1_ratio" | bc`
     total_umi=`cat sim${rep}.out | wc -l`
     s_mu=`cat sim${rep}.truth.labels | awk '{print $2}' | sort | uniq -c | awk '{print $1}' | awk -v n=0 '{n+=$1}END{print n/NR}'`
@@ -184,7 +183,7 @@ for rep in `seq 1 $num_rep`; do
     bp_del=`echo $elist | awk '{print $2}'`
     bp_sub=`echo $elist | awk '{print $3}'`
     bp_idl=`echo "$bp_ins+$bp_del" | bc`
-    bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f:",$1/a;printf "%3.3f:",$2/a;printf "%3.3f",$3/a}'`
+    bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f-",$1/a;printf "%3.3f-",$2/a;printf "%3.3f",$3/a}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
 
 : <<'END'
@@ -230,6 +229,6 @@ END
         *)
             echo "invalid tool"
         esac        
-        echo "$pN $oN $var_oN $umi_len $err_rate $input_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $td $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
+        echo "$pN $oN $var_oN $umi_len $err_rate $mut_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $td $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
     done
 done
