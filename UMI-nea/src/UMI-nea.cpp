@@ -41,50 +41,6 @@ double mad(const vector<int> v){
       return median(diff);
 }
 
-int calculate_dist_upper_bound_old(float error_rate, int max_umi_len){
-      int upper_ceil;
-      int upper_floor;
-      float z;
-      int alpha_i;
-      if (max_umi_len<=20)
-	    alpha_i=1; //alpha=0.95;
-      else if (max_umi_len > 20 && max_umi_len <= 30)
-	    alpha_i=2; //alpha=0.99;
-      else if (max_umi_len > 30 && max_umi_len <= 40)
-	    alpha_i=3; //alpha=0.999;
-      else
-	    alpha_i=4; //alpha=0.9999;
-      switch(alpha_i){
-	    case 1: //0.95:
-		  z=1.96;
-		  break;
-	    case 2: //0.99:
-		  z=2.576;
-		  break;
-	    case 3: //0.999:
-		  z=3.29;
-		  break;
-	    case 4: //0.9999:
-		  z=3.89;
-		  break;
-	    default:
-		  z=1.96;
-      }
-      float dist_upper_bound=max_umi_len*error_rate+z*sqrt(error_rate*(1-error_rate)*max_umi_len ) ;
-      upper_ceil=ceil(dist_upper_bound);
-      upper_floor=floor(dist_upper_bound);
-      if (max_umi_len<=20)
-		if (upper_floor>0)
-			return upper_floor;
-		else
-			return 1;
-      else
-		if (upper_ceil > 0 )
-			return upper_ceil;
-		else
-			return 1;
-}
-
 int calculate_dist_upper_bound(float error_rate, int max_umi_len){
       float z;
       int alpha_i;
@@ -311,55 +267,6 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       sort (umi_data.begin(), umi_data.end());
       auto lower_bound_it = lower_bound(umi_data.begin(), umi_data.end(), lower_nb);
       vector<int> umi_filtered_data(lower_bound_it, umi_data.end()) ;
-      min_read_founder=lower_nb;
-      nb_estimated_molecule=umi_filtered_data.size();
-}
-
-void fit_nb_model_old( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
-      vector<int>  umi_data;
-      vector<int> read_replicated_data;
-      read_umi_data(filename, umi_data,read_replicated_data );
-      if (umi_data.size() <= 1 ){
-		min_read_founder=umi_data[0];
-                nb_estimated_molecule=umi_data.size();
-		cout<<"UMI input file only has one UMI "<<endl;
-		return;
-      }
-      median_rpu=median(read_replicated_data);
-      int median_estimated_molecule=read_replicated_data.size()/median_rpu;
-      int mad_rpu=mad(read_replicated_data);
-      vector<int> read_replicated_filtered_data=read_replicated_data;
-      int lower_bound_rpu;
-      if (mad_rpu!=0){ //for super high input samples, we had example that rpu is below 6 for all UMIs, the MAD will be 0 in those cases.
-	     lower_bound_rpu=median_rpu-3*mad_rpu;
-             sort (read_replicated_data.begin(), read_replicated_data.end());
-             auto lower_bound_it = lower_bound(read_replicated_data.begin(), read_replicated_data.end(), lower_bound_rpu);
-	     vector <int> temp(lower_bound_it, read_replicated_data.end() );
-	     read_replicated_filtered_data=temp;
-      }
-      if (var(read_replicated_filtered_data ) == 0){ //this is the case that after removing outliners or even just in the input, only one rpu present
-		min_read_founder=umi_data[0];
-		nb_estimated_molecule=umi_data.size();
-		if (verbose)
-			cout<<"Data to fit has var = 0"<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data )<<"\nMAD="<<mad_rpu<<endl;
-		return;
-      }
-      long double nb_p=mean(read_replicated_filtered_data)/var(read_replicated_filtered_data );
-      long double nb_r=pow(mean(read_replicated_filtered_data), 2)/(var(read_replicated_filtered_data)-mean(read_replicated_filtered_data));
-      if (verbose)
-		cout<<"lower_bound_rpu="<<lower_bound_rpu<<"\ndata_size="<<read_replicated_filtered_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data )<<"\nMAD="<<mad_rpu<<endl;
-
-      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r very inaccurate, (found in some high input samples!) so just give UMI clustering results
-		min_read_founder=1;
-		nb_estimated_molecule=umi_data.size();
-		return;
-      }
-      int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ;
-      if (lower_nb==0)
-		lower_nb=1;
-      sort (umi_data.begin(), umi_data.end());
-      auto lower_bound_it2 = lower_bound(umi_data.begin(), umi_data.end(), lower_nb);
-      vector<int> umi_filtered_data(lower_bound_it2, umi_data.end()) ;
       min_read_founder=lower_nb;
       nb_estimated_molecule=umi_filtered_data.size();
 }

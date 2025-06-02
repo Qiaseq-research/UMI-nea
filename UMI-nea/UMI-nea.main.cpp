@@ -59,7 +59,7 @@ void PrintHelp(){
         PrintHelp_one_line("--kp -k <default:false>:", "Apply knee plot to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--auto -a <default:true>:", "Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--just -j <default:false>:", "Just estimate molecule number and rpu cutoff");
-	PrintHelp_one_line("--prob -q <float [0, 1]|default:0.05>:", "probability for nb lower tail quantile cutoff in quantification! Not reommended to change");
+	PrintHelp_one_line("--prob -q <float [0, 1]|default:0.001>:", "probability for nb lower tail quantile cutoff in quantification! Not reommended to change");
 	PrintHelp_one_line("--greedy -d <default:false>:", "Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not reommended!");
 	PrintHelp_one_line("--thread -t <int >1 |default:10>:", "Num of thread to use, minimal 2");
 	PrintHelp_one_line("--pool -p <int >0 |default:1000>:", "Total UMIs to process in each thread at one time");
