@@ -27,4 +27,5 @@ COPY UMIC-seq.py UMIC-seq/
 RUN git clone -b v0.3.4 https://github.com/vpc-ccg/calib.git calib
 RUN cd calib && make
 
+WORKDIR /home/
 CMD ["/bin/bash"]

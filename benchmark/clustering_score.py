@@ -1,10 +1,6 @@
 import sys
-from skbio.alignment import StripedSmithWaterman
-from multiprocessing import Pool
 from sklearn import metrics
 import pandas as pd
-from matplotlib import pyplot as plt
-import seaborn as sns
 
 def find_score(c_in0,c_in1):
     df0 = pd.read_csv(c_in0, sep=" ", header=None)
