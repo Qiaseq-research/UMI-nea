@@ -75,12 +75,16 @@ run_umi-tools() {
         fi
         if [ $dist -gt 0 ]; then
             echo "$name r=$rep t=$td umi-tools" >> umi-tools.time 
-            { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log --method=adjacency"; } 2>> umi-tools.time
+            { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log"; } 2>> umi-tools.time
             if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
                 join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
             fi
         else
-            echo "Distance value cannot be 0 !"
+            if [ -f log/UMI-nea.sim${rep}.*.log ]; then
+                dist=`cat log/UMI-nea.sim${rep}.*.log | grep "maxdist" | head -1 | awk '{print $NF}'`
+            else
+                echo "Distance value cannot be 0 !"
+            fi
         fi
         get_clustering_score umi-tools/sim${rep}.t$td.labels sim${rep}.truth.labels umi-tools.sim${rep}.t$td.score
     fi
@@ -126,7 +130,7 @@ run_UMIC-seq() {
         fi
         gt=$s
         echo "$name r=$rep t=$td UMIC-seq" >> UMIC-seq.time
-        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T $td clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep}.t$td --steps $s $e 1 > log/UMIC-seq.sim${rep}t$td.clustertest.log 2>&1"; } 2>> UMIC-seq.time
+        { time timeout ${time_lim} bash -c "python /Download/UMIC-seq/UMIC-seq.py -T $td clustertest -i UMIC-seq/sim${rep}.fa -o UMIC-seq/sim${rep}.t$td --steps $s $e 1 > log/UMIC-seq.sim${rep}.t$td.clustertest.log 2>&1"; } 2>> UMIC-seq.time
     fi
     if [ ! -f UMIC-seq/sim${rep}.t$td.labels ]; then
         if [ $umic_threshold -eq 0 ]; then

@@ -35,6 +35,41 @@ docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiau
 
 There are two main usage of UMI-nea, one is do UMI clustering and quantification, the other is do quantification only based on input file
 
+### Extract UMI
+
+We provide a helper script to extract UMI sequence and generate UMI-nea input.
+
+To extract UMI with helper script
+```bash
+bash UMI-nea_helper.sh -f <read1-file> -a <position> -r <read2-file> -b <position>
+```
+
+##### required
+1. `-f <str>`: forward read fastq file, end with .fq/.fastq/.fq.gz/.fastq.gz
+2. `-a <int:int>`: 1-based umi start and end positions at forward reads e.g. a 12bp umi at 1:12
+
+##### optional
+1. `-r <str>`: reverse read fastq file, end with .fq/.fastq/.fq.gz/.fastq.gz
+2. `-b <int:int>`: 1-based umi start and end positions at reverse reads
+3. ``
+4. `-h`: Show help
+
+#### Example run
+
+Single end
+```bash
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.fastq -a 1:12"
+```
+
+Pair end
+```bash
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -a 1:8 -r test.R2.fastq -b 1:8"
+```
+or
+```bash
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:12"
+```
+
 ### Clustering
 
 To run UMI-nea clustering with quantification:
@@ -129,38 +164,4 @@ rpu_cutoff      2
 estimated_molecules     1091
 after_rpu-cutoff_molecules      1022
 
-```
-
-### Extract UMI
-
-We provide a helper script to extract UMI sequence and generate UMI-nea input.
-
-To extract UMI with helper script
-```bash
-bash UMI-nea_helper.sh -f <read1-file> -a <position> -r <read2-file> -b <position>
-```
-
-##### required
-1. `-f <str>`: forward read fastq file, end with .fq/.fastq/.fq.gz/.fastq.gz
-2. `-a <int:int>`: 1-based umi start and end positions at forward reads e.g. a 12bp umi at 1:12
-
-##### optional
-1. `-r <str>`: reverse read fastq file, end with .fq/.fastq/.fq.gz/.fastq.gz
-2. `-b <int:int>`: 1-based umi start and end positions at reverse reads
-3. `-h`: Show help
-
-#### Example run
-
-Single end
-```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.fastq -a 1:12"
-```
-
-Pair end
-```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -a 1:8 -r test.R2.fastq -b 1:8"
-```
-or
-```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:12"
 ```
