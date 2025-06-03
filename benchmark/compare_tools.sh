@@ -50,7 +50,7 @@ run_UMI-nea() {
             cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > UMI-nea/sim${rep}.input
         fi
         maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
-        echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time        
+        echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
         if [ $dist -eq 0 ]; then
             { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
             dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
@@ -73,18 +73,17 @@ run_umi-tools() {
             samtools sort umi-tools/sim${rep}.bam -o umi-tools/sim${rep}.srt.bam
             samtools index umi-tools/sim${rep}.srt.bam
         fi
+        if [ -f log/UMI-nea.sim${rep}.*.log ]; then
+            dist=`cat log/UMI-nea.sim${rep}.*.log | grep "maxdist" | head -1 | awk '{print $NF}'`
+        fi
         if [ $dist -gt 0 ]; then
-            echo "$name r=$rep t=$td umi-tools" >> umi-tools.time 
+            echo "$name r=$rep t=$td umi-tools" >> umi-tools.time
             { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log"; } 2>> umi-tools.time
             if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
                 join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
             fi
         else
-            if [ -f log/UMI-nea.sim${rep}.*.log ]; then
-                dist=`cat log/UMI-nea.sim${rep}.*.log | grep "maxdist" | head -1 | awk '{print $NF}'`
-            else
-                echo "Distance value cannot be 0 !"
-            fi
+            echo "Distance value cannot be 0 !"
         fi
         get_clustering_score umi-tools/sim${rep}.t$td.labels sim${rep}.truth.labels umi-tools.sim${rep}.t$td.score
     fi
@@ -232,7 +231,7 @@ END
             ;;
         *)
             echo "invalid tool"
-        esac        
+        esac
         echo "$pN $oN $var_oN $umi_len $err_rate $mut_ratio $rep $total_umi $s_mu $s_var $bp_sub $bp_idl $bp_ratio $umi_sub $umi_idl $uniq_umi $eval_t $maxdist $td $runtime_t $n_cluster $score_v $score_h $score_c $rpu_cutoff $rpu_model $est_mol" >> performance.txt
     done
 done
