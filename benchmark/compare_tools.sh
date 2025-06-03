@@ -55,7 +55,7 @@ run_UMI-nea() {
             { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
             dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
         else
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -d $dist -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -m $dist -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
         fi
         join <(cat UMI-nea/sim${rep}.t$td.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.t$td.labels
         get_clustering_score UMI-nea/sim${rep}.t$td.labels sim${rep}.truth.labels UMI-nea.sim${rep}.t$td.score
