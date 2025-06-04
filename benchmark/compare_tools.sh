@@ -20,9 +20,8 @@ echo -e "simulation\numi_len=$umi_len\nerr_rate=$err_rate\nnum_founder=$pN\nnum_
 mkdir -p $name/log
 cd $name
 
-seq="CTGCTATACAGACTTGTCACTGGATTTAGAGTCTCTCAGCTGGTACACGGCAGGGTCAGGGTTCTGGATATTTGCTCTTACAGTTACTGTGGTTCCGGCTCCAAAGCTGAGCTTGTAGTCGTTAGAACCCTCTCTCATTGCACAGAAATACATTGCTGAGTCCCCCAGTTGTGAAGCGGAGATGACAAGGTTGGCGGATTTTCTTGCCTTCTGGAAATTCAATGAGTAGCGACCTTCTGTTGCATTTTGCTCGTCATAAGA"
-qlt="BBBBBFFFFFFFGGGGGGFFFGHHHHHHHGHDEHBGHHHHHHHCGGHHGGGEEEG2GFHHA2FGHHHEFHHGFHHHGHDFHGEH5DFHB@@E2FDCEEEFGCHHFFHGHHGHHFHHGFHHGEFAEHH3?/?FHFGFHHHFGD2DFF2FHHH2GHGHHHFHFGFHFFGGHFHFD11FFDCG?<GGHGHEHHB<G?BA@C-.F0BF99C/0B9CFBEFFGFGG00BFEFBFG?--BAFFFFFFF/9BFFFFFFFFFFFFEFFF"
-rdn="@M01750:63:000000000-KLHVC:1:1101:18381:1596"
+seq="GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGATCCCGGCTCCAGGCCCGCGCGCGCCTCAGGCCGTTTCCCTATTTAAGGCCTCGCCGCCGCGGGGTGTGTGA"
+aln="0,chr1,1000001,60,150M,*,0,0,GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGATCCCGGCTCCAGGCCCGCGCGCGCCTCAGGCCGTTTCCCTATTTAAGGCCTCGCCGCCGCGGGGTGTGTGA,GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGATCCCGGCTCCAGGCCCGCGCGCGCCTCAGGCCGTTTCCCTATTTAAGGCCTCGCCGCCGCGGGGTGTGTGA,NM:i:0,MD:Z:150,AS:i:150,XS:i:0"
 
 simulate_umi() {
     rep=$1
@@ -68,9 +67,9 @@ run_umi-tools() {
     mkdir -p umi-tools
     if [ ! -f umi-tools/sim${rep}.t$td.labels ]; then
         if [ ! -f umi-tools/sim${rep}.srt.bam.bai ]; then
-            cat sim${rep}.out | cut -f1 | awk -v r="$rdn" -v s="$seq" -v q="$qlt" '{print r":c"NR"_"$1"\n"s"\n""+""\n"q}' > umi-tools/sim${rep}.fastq
-            bwa mem -t 72 -k 10 -L 0 -B 1 -O 1 -T 18 $code_dir/refgenome/ref.fa umi-tools/sim${rep}.fastq 2> log/umi-tools.bwa.log | samtools view -Sb - 1> umi-tools/sim${rep}.bam
-            samtools sort umi-tools/sim${rep}.bam -o umi-tools/sim${rep}.srt.bam
+            echo -e "@SQ\tSN:chr1\tLN:248956422" > umi-tools/sim${rep}.sam
+            cat sim${rep}.out | cut -f1 | awk -v a=$aln '{gsub(",","\t",a);print "read-"NR"_"$1"\t"a}' >> umi-tools/sim${rep}.sam
+            samtools sort umi-tools/sim${rep}.sam | samtools view - -Sb -o umi-tools/sim${rep}.srt.bam
             samtools index umi-tools/sim${rep}.srt.bam
         fi
         if [ -f log/UMI-nea.sim${rep}.*.log ]; then
@@ -119,8 +118,8 @@ run_UMIC-seq() {
     td=$2
     mkdir -p UMIC-seq
     if [ ! -f UMIC-seq/sim${rep}.t$td.clustertest ]; then
-        cat sim${rep}.out | cut -f1 | awk -v r="$rdn" '{print r":c"NR"_"$1"\n"$1}' | sed 's/^@/>/g' > UMIC-seq/sim${rep}.fa
-        cat sim${rep}.out | cut -f1 | awk -v r="$rdn" -v s="$seq" -v q="$qlt" '{print r":c"NR"_"$1"\n"s"\n""+""\n"q}' > UMIC-seq/sim${rep}.fastq
+        cat sim${rep}.out | cut -f1 | awk '{print ">read-"NR"_"$1"\n"$1}' > UMIC-seq/sim${rep}.fa
+        cat sim${rep}.out | cut -f1 | awk -v s="$seq" '{print "@read-"NR"_"$1"\n"s"\n""+""\n"s}' > UMIC-seq/sim${rep}.fastq
         s=20
         e=40
         if [ $umi_len -lt 20 ]; then
@@ -154,12 +153,11 @@ run_calib() {
     td=$2
     mkdir -p calib/
     if [ ! -f calib/sim${rep}.t$td.labels ]; then
-        seq150=${seq:0:150}
-        seq150_rc=`echo $seq150 | rev | tr ACGT TGCA`
+        seq_rc=`echo $seq | rev | tr ACGT TGCA`
         echo "$name r=$rep t=$td calib" >> calib.time
         if [ ! -f calib/sim${rep}.R1.fastq ] || [ ! -f calib/sim${rep}.R2.fastq ]; then
-            cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq150 -v rdn=$rdn -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print rdn":"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
-            cat sim${rep}.out | awk -v seq=$seq150_rc -v rdn=$rdn -v OFS="\n" '{print rdn":"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
+            cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print "@read:"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
+            cat sim${rep}.out | awk -v seq=$seq_rc -v OFS="\n" '{print "@read:"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
         fi
         { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}.t$td. -c $td 1> log/calib.sim${rep}.t$td.log 2>&1"; } 2>> calib.time
         cat calib/sim${rep}.t$td.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.t$td.labels
