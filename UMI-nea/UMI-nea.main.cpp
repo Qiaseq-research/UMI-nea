@@ -17,6 +17,7 @@ string out_file;
 string updated_count_file;
 string estimate_out_file;
 int max_dist=2;
+bool set_dist=false;
 int num_thread=10;
 int pool_size=1000;
 int min_read_founder_user=1;
@@ -52,14 +53,15 @@ void PrintHelp(){
 	PrintHelp_one_line("--maxL -l <int|default:-1>", "Max length of UMI, longer UMIs will be trimmed to the length set! Required to set for UMI clustering!");
 	PrintHelp_one_line("--in -i <fname>:", "Input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads");
 	PrintHelp_one_line("--out -o <fname>:", "Output file, output has three cols, GroupID, UMI, FounderUMI");
-	PrintHelp_one_line("--minC -m <int|default:2>:", "Min levenshtein distance cutoff, overruled by -e");
-	PrintHelp_one_line("--errorR -e <float (0,1]|default:0.001>:", "If set, -m will be calculated based on binomial CI, override -m");
-	PrintHelp_one_line("--minF -f <int|default:1>", "Min reads count for a UMI to be founder, overruled by -a or -n or -k");
+	PrintHelp_one_line("--maxC -m <int|default:2>:", "Max levenshtein distance cutoff within UMI cluster; if set -m do not set -e");
+	PrintHelp_one_line("--errorR -e <float (0,1]|default:0.001>:", "If set -e, do not set -m and maxC -m will be calculated based on binomial CI");
+	PrintHelp_one_line("--minF -f <int|default:1>", "Min reads count for a UMI to be founder, overrided by -a or -n or -k");
 	PrintHelp_one_line("--nb -n <default:false>:", "Apply negative binomial model to decide min reads for a founder, override -f");
         PrintHelp_one_line("--kp -k <default:false>:", "Apply knee plot to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--auto -a <default:true>:", "Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f");
 	PrintHelp_one_line("--just -j <default:false>:", "Just estimate molecule number and rpu cutoff");
 	PrintHelp_one_line("--prob -q <float [0, 1]|default:0.001>:", "probability for nb lower tail quantile cutoff in quantification! Not reommended to change");
+	PrintHelp_one_line("--angle -b <default:120>:", "minimal angle for knee point");
 	PrintHelp_one_line("--greedy -d <default:false>:", "Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not reommended!");
 	PrintHelp_one_line("--thread -t <int >1 |default:10>:", "Num of thread to use, minimal 2");
 	PrintHelp_one_line("--pool -p <int >0 |default:1000>:", "Total UMIs to process in each thread at one time");
@@ -88,7 +90,7 @@ void PrintOptions(){
 	if (auto_estimate)
                 cout << "auto-Estimate = ON" << endl;
 
-	cout << "min_ReadsPerUmi_founer  = " << min_read_founder << endl;
+	cout << "min_ReadsPerUmi_founder  = " << min_read_founder << endl;
 
 	if (greedy_mode )
                 cout << "greedy_Mode = ON"<< endl;
@@ -100,7 +102,7 @@ void PrintOptions(){
 }
 void ProcessArgs(int argc, char** argv)
 {
-      const char* const short_opts = "l:i:o:m:e:t:p:q:f:agjkngh";
+      const char* const short_opts = "l:i:o:m:e:t:p:q:f:b:agjkngh";
       const option long_opts[] = {
             {"maxL", required_argument, nullptr, 'l'},
             {"in", required_argument, nullptr, 'i'},
@@ -113,6 +115,7 @@ void ProcessArgs(int argc, char** argv)
             {"auto", no_argument, nullptr, 'a'},
 	    {"just", no_argument, nullptr, 'j'},
 	    {"prob", required_argument, nullptr, 'q'},
+	    {"angle", required_argument, nullptr, 'b'},
 	    {"greedy", no_argument, nullptr, 'g'},
 	    {"thread", required_argument, nullptr, 't'},
 	    {"pool", required_argument, nullptr, 'p'},
@@ -138,6 +141,7 @@ void ProcessArgs(int argc, char** argv)
                         break;
 		  case 'm':
                         max_dist = atoi(optarg);
+			set_dist=true;
                         break;
                   case 'e':
 			error_rate = atof(optarg);
@@ -165,6 +169,9 @@ void ProcessArgs(int argc, char** argv)
 		  case 'q':
 			nb_lowertail_p = atof(optarg);
                         break;
+		  case 'b':
+			kp_fail_angle=atoi(optarg);
+			break;
 		  case 'g':
                         greedy_mode = true;
                         break;
@@ -198,6 +205,10 @@ void capture_input_error(){
                 cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"max_umi_len="<<max_umi_len<<"; was Not set or Not set correctly"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
         }
+	if (set_dist && set_error){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"Do not set both -e and -m"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+		PrintHelp();
+	}
         if ( error_rate <= 0 || error_rate > 1 ){
 		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"error_rate="<<error_rate<<"; error_rate must set within (0,1]"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();

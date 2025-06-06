@@ -244,7 +244,7 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       if (verbose)
 	      cout<<"median_estimated_molecule="<<median_estimated_molecule<<endl;
       if (var(umi_data ) == 0){ //this is the case that only one rpu present
-                min_read_founder=umi_data[0];
+                min_read_founder=umi_data[umi_data.size()-1];
                 nb_estimated_molecule=umi_data.size();
                 if (verbose)
                         cout<<"Data to fit has var = 0"<<"\nMedian="<<median_rpu<<" min_read_founder="<<min_read_founder<<" nb_estimated_molecule="<<nb_estimated_molecule<<endl;
