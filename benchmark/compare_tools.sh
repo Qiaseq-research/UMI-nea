@@ -51,10 +51,10 @@ run_UMI-nea() {
         maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
         echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
         if [ $dist -eq 0 ]; then
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
             dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
         else
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -m $dist -a >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -m $dist >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
         fi
         join <(cat UMI-nea/sim${rep}.t$td.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.t$td.labels
         get_clustering_score UMI-nea/sim${rep}.t$td.labels sim${rep}.truth.labels UMI-nea.sim${rep}.t$td.score
@@ -79,7 +79,7 @@ run_umi-tools() {
             echo "$name r=$rep t=$td umi-tools" >> umi-tools.time
             { time timeout ${time_lim} bash -c "umi_tools group -I umi-tools/sim${rep}.srt.bam --edit-distance-threshold=$dist --group-out=umi-tools/sim${rep}.grouped.tsv --log=log/umi-tools.sim${rep}.t$td.log"; } 2>> umi-tools.time
             if [ -s umi-tools/sim${rep}.grouped.tsv ]; then
-                join -1 2 -2 1 -o 1.1 1.2 1.3 1.4 2.2 <(join <(cat umi-tools/sim${rep}.grouped.tsv | cut -f5,7 | sort | uniq -c | awk '{print $2,$3,$1}' | sort -k1,1) <(cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print $2,$1,NR-1}' | sort -k1,1) | sort -k2,2) <(cat sim${rep}.out | cut -f1 | sort -u | awk '{print $1,NR-1}' | sort -k1,1) | sort -k1,1 | awk '{print $1,$3,$5}' | awk '{for(i=1;i<=$2;i++){print $1,$3}}' > umi-tools/sim${rep}.t$td.labels
+                tail -n+2 umi-tools/sim${rep}.grouped.tsv | cut -f5,9 | awk '{print $1,$2}' | sort -k1,1 > umi-tools/sim${rep}.t$td.labels
             fi
         else
             echo "Distance value cannot be 0 !"
@@ -102,7 +102,7 @@ find_threshold() {
         s=`echo $a | cut -d" " -f2`
         if [ $i -gt 0 ]; then
             c=`echo "$s-$s0" | bc -l`
-            if (( $(echo "$c < $cutoff" | bc -l) )) && (( $(echo "$t > $base_sim" | bc -l) )) && (( $(echo "$t > 15" | bc -l) )); then
+            if (( $(echo "$c < $cutoff" | bc -l) )) && (( $(echo "$s > $base_sim" | bc -l) )) && (( $(echo "$t0 >= 15" | bc -l) )); then
                 gt=$t0
                 return $gt
             fi

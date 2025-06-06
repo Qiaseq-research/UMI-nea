@@ -51,7 +51,7 @@ bash UMI-nea_helper.sh -f <read1-file> -a <position> -r <read2-file> -b <positio
 ##### optional
 1. `-r <str>`: reverse read fastq file, end with .fq/.fastq/.fq.gz/.fastq.gz
 2. `-b <int:int>`: 1-based umi start and end positions at reverse reads
-3. ``
+3. `-n <str>`: output file prefix
 4. `-h`: Show help
 
 #### Example run
@@ -69,6 +69,11 @@ or
 ```bash
 docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:12"
 ```
+
+#### Extract UMI output
+
+1. UMI-nea input
+2. UMI extracted fastqs with UMI sequences attached to the end of readname with "_"
 
 ### Clustering
 
@@ -164,4 +169,47 @@ rpu_cutoff      2
 estimated_molecules     1091
 after_rpu-cutoff_molecules      1022
 
+```
+
+### Generate output fastq
+
+We provide a helper script to convert UMI-nea output file to fastq files.
+
+To generate fastq files
+```bash
+bash convert_to_fastq.sh -f <UMI-extracted read1-file> -r <UMI-extracted read2-file> -u <UMI-nea output file>
+```
+
+##### required
+1. `-f <str>`: UMI sequences extracted forward read fastq file, end with .fq/.fastq
+2. `-u <str>`: output file from UMI-nea with error corrected founder for each UMI sequences
+
+##### optional
+1. `-r <str>`: UMI sequences extracted reverse read fastq file, end with .fq/.fastq
+2. `-n <str>`: output file prefix
+3. `-h`: Show help
+
+#### Input files
+
+`UMI extracted fastq files`: UMI sequences extracted and attached to the end of readname with "_"
+@read_a_1_GAGGTGGGTCAAGGATCGACAAAC
+GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCG
++
+HGHHHHHHHHGGGGGGGGGGHHHHHH1GHHHHGHHHH
+
+`UMI-nea output file`: A tab separated file with error corrected founder for each UMI sequences with below columns
+
+| Amplicon_ID | original UMI sequence | error corrected UMI sequence |
+|:-----------:|:---------------------:|:----------------------------:|
+
+#### Example run
+
+Single end
+```bash
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/convert_to_fastq.sh -f out.umi.R1.fastq -u out.clustered"
+```
+
+Pair end
+```bash
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f out.umi.R1.fastq -r out.umi.R2.fastq -u out.clustered"
 ```
