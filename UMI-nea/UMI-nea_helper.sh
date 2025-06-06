@@ -7,7 +7,7 @@ l2="NA"
 outname="out"
 while getopts "hf:a:r:b:n:" opt; do
     case ${opt} in
-        h) echo -e "usage [-h] [-f forward read REQUIRED]\n[-r reverse read used for parir-end reads]\n[-a 1-based umi position at forward reads e.g. 1:12]\n[-b 1-based umi position at reversed reads]"; exit 0 ;;
+        h) echo -e "usage [-h] [-f forward read REQUIRED]\n[-r reverse read used for parir-end reads]\n[-a 1-based umi position at forward reads e.g. 1:12]\n[-b 1-based umi position at reversed reads]\n[-n output file prefix]"; exit 0 ;;
         f) r1=$OPTARG ;;
         r) r2=$OPTARG ;;
         a) l1=$OPTARG ;;
@@ -39,21 +39,25 @@ fi
 
 if [ $r1 == *".gz" ]; then
     r1_name=`basename $r1 | sed 's/fq.gz//' | sed 's/.fastq.gz//'`
-    zcat $r1 | paste - - - - | awk -v s=$l1_s -v e=$l1_e '{print $1"\t"substr($2,s,(e-s))}' > $r1_name.umi
+    zcat $r1 | paste - - - - | awk -v s=$l1_s -v e=$l1_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R1.txt
 else
     r1_name=`basename $r1 | sed 's/fq//' | sed 's/.fastq//'`
-    cat $r1 | paste - - - - | awk -v s=$l1_s -v e=$l1_e '{print $1"\t"substr($2,s,(e-s))}' > $r1_name.umi
+    cat $r1 | paste - - - - | awk -v s=$l1_s -v e=$l1_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R1.txt
 fi
 
 if [ $r2 != "NA" ]; then
     if [ $r2 == *".gz" ]; then
         r2_name=`basename $r2 | sed 's/fq.gz//' | sed 's/.fastq.gz//'`
-        zcat $r2 | paste - - - - | awk -v s=$l2_s -v e=$l2_e '{print $1"\t"substr($2,s,(e-s))}' > $r2_name.umi
+        zcat $r2 | paste - - - - | awk -v s=$l2_s -v e=$l2_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R2.txt
     else
         r2_name=`basename $r2 | sed 's/fq//' | sed 's/.fastq//'`
-        cat $r2 | paste - - - - | awk -v s=$l2_s -v e=$l2_e '{print $1"\t"substr($2,s,(e-s))}' > $r2_name.umi
+        cat $r2 | paste - - - - | awk -v s=$l2_s -v e=$l2_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R2.txt
     fi
-    paste <(cat $r1_name.umi | cut -f2) <(cat $r2_name.umi | cut -f2) -d "" | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > $outname
+    paste <(cat $outname.umi.R1.txt | awk -F"\t" '{print $2}') <(cat $outname.umi.R2.txt | awk -F"\t" '{print $2}') -d "" | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > $outname.input
+    paste <(cat $outname.umi.R1.txt) <(cat $outname.umi.R2.txt) | awk -F"\t" -v OFS="\n" -v o=$outname '{u=$2""$7; print $1"_"u,$3,$4,$5 > o".umi.R1.fastq";print $1"_"u,$8,$9,$10 > o".umi.R2.fastq"}'
+    rm -f $outname.umi.R*.txt
 else
-    cat $r1_name.umi | cut -f2 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > $outname
+    cat $outname.umi.R1.txt | awk -F"\t" '{print $2}' | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > $outname.input
+    cat $outname.umi.R1.txt | awk -F"\t" -v OFS="\n" '{print $1"_"$2,$3,$4,$5}' > $outname.umi.R1.fastq
+    rm -f $outname.umi.R1.txt
 fi

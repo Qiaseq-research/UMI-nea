@@ -5,8 +5,8 @@ import seaborn as sns
 import matplotlib.lines as lines
 # match V*:CDR3:J
 dfc = pd.read_csv("umi_count_7_clonotypes.txt",sep="\t")
-dfc = dfc[dfc["number of UMI"] >= 1]
 clono0 = np.unique(dfc["clonotype"].tolist())
+dfc = dfc[dfc["number of UMI"] >= 1]
 clono_ordered = [5,6,3,7,4,2,1]
 clono = []
 for i in clono_ordered:
@@ -29,31 +29,32 @@ for i in range(len(clono)):
     for j in range(len(plfm)):
         p = plfm[j]
         dfc1 = dfc[(dfc["clonotype"]==cl) & (dfc["platform"]==p)]
-        if max(dfc1["log10(number of UMI)"]) > 4:
-            ymax = 5
-        else:
-            ymax = 4
-        y_ticks = [x for x in range(ymax+1)]
-        y_ticklabels = [10**x for x in range(ymax+1)]
-        sns.lineplot(ax=axes[j,i],x=dfc1["condition"],y=dfc1["log10(number of UMI)"],
-                     hue=dfc1["replicate"],marker='o', palette=sns.color_palette("mako_r", 2))
-        if i == len(clono)-1:
-            lines, labels = axes[j,i].get_legend_handles_labels()
-        cd1 = dfc1["condition"].tolist()
-        lg1 = dfc1["log10(number of UMI)"].tolist()
-        numi = dfc1["number of UMI"].tolist()
-        r1 = dfc1["replicate"].tolist()
-        for k in range(len(cd1)):
-            if r1[k] == "rep1":
-                v = 'top'
-                h = 'left'
-                tcl = '#348fa7'
+        if len(dfc1) > 0:
+            if (max(dfc1["log10(number of UMI)"]) <= 4):
+                ymax = 4
             else:
-                v = 'bottom'
-                h = 'right'
-                tcl = '#413d7b'
-            axes[j,i].text(cd1[k], lg1[k], numi[k], va=v, ha=h, fontsize=16, color=tcl)
-        axes[j,i].get_legend().remove()
+                ymax = 5
+            y_ticks = [x for x in range(ymax+1)]
+            y_ticklabels = [10**x for x in range(ymax+1)]
+            sns.lineplot(ax=axes[j,i],x=dfc1["condition"],y=dfc1["log10(number of UMI)"],
+                         hue=dfc1["replicate"],marker='o', palette=sns.color_palette("mako_r", 2))
+            if i == len(clono)-1:
+                lines, labels = axes[j,i].get_legend_handles_labels()
+            cd1 = dfc1["condition"].tolist()
+            lg1 = dfc1["log10(number of UMI)"].tolist()
+            numi = dfc1["number of UMI"].tolist()
+            r1 = dfc1["replicate"].tolist()
+            for k in range(len(cd1)):
+                if r1[k] == "rep1":
+                    v = 'top'
+                    h = 'left'
+                    tcl = '#348fa7'
+                else:
+                    v = 'bottom'
+                    h = 'right'
+                    tcl = '#413d7b'
+                axes[j,i].text(cd1[k], lg1[k], numi[k], va=v, ha=h, fontsize=16, color=tcl)
+            axes[j,i].get_legend().remove()
         axes[j,i].set_ylim(-0.1,4)
         axes[j,i].set_yticks(y_ticks)
         axes[j,i].set_yticklabels(y_ticklabels, fontsize=12)
