@@ -102,7 +102,7 @@ find_threshold() {
         s=`echo $a | cut -d" " -f2`
         if [ $i -gt 0 ]; then
             c=`echo "$s-$s0" | bc -l`
-            if (( $(echo "$c < $cutoff" | bc -l) )) && (( $(echo "$s > $base_sim" | bc -l) )) && (( $(echo "$t0 >= 15" | bc -l) )); then
+            if (( $(echo "$c < $cutoff" | bc -l) )) && (( $(echo "$t > $base_sim" | bc -l) )) && (( $(echo "$t0 >= 15" | bc -l) )); then
                 gt=$t0
                 return $gt
             fi
@@ -223,9 +223,9 @@ END
         UMI-nea)
             runtime_t=`cat $eval_t.time | grep -A 2 "$name r=$rep t=$td" | tail -1 | awk '{split($NF,a,"m");n+=a[1]*60;split(a[2],b,"s");n+=b[1];printf "%.2f\n",n}'`
             maxdist=`cat log/$eval_t.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
-            rpu_cutoff=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -3 | tail -1 | awk '{print $NF}'`
+            rpu_cutoff=`cat $eval_t/sim${rep}.t$td.clustered.estimate | grep "rpu_cutoff" | awk '{print $NF}'`
             rpu_model=`cat $eval_t/sim${rep}.t$td.clustered.estimate | head -1 | awk '{print ($1~/NB/?"negbinom":"kneeplot")}'`
-            est_mol=`cat $eval_t/sim${rep}.t$td.clustered.estimate | tail -1 | awk '{print $NF}'`
+            est_mol=`cat $eval_t/sim${rep}.t$td.clustered.estimate | grep "estimated_molecules" | awk '{print $NF}'`
             ;;
         *)
             echo "invalid tool"

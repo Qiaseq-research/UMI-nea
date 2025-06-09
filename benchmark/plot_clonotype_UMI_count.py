@@ -21,7 +21,6 @@ dfc.to_csv("clonotype_umi_count.csv", index=False)
 dfc["condition"] = dfc["condition"].apply(lambda x: cond[x])
 conditions = list(cond.keys())
 conditions.sort()
-
 sns.set_style('whitegrid')
 fig, axes = plt.subplots(2,len(clono), figsize = (5*len(clono),9), frameon=True)
 for i in range(len(clono)):

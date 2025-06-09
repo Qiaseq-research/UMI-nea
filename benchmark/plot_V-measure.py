@@ -14,7 +14,7 @@ nf = {1000:"1,000",10000:"10,000"}
 df["num_founder"] = df["num_founder"].apply(lambda x: nf[x])
 df_b = df[["num_founder","read_type","tool","V-measure"]]
 
-tools_ord = ["calib","UMIc-seq","umi-tools","UMI-nea"]
+tools_ord = ["Calib","UMIc-seq","UMI-tools","UMI-nea"]
 df_b_gp1 = df_b.groupby(["num_founder","read_type","tool"])["V-measure"].mean()
 df_b_gp1 = df_b_gp1.reset_index()
 
