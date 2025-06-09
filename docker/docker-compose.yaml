@@ -1,4 +1,4 @@
 services:
   man:
     build: .
-    image: qiaseqresearch/umi-nea:v2
+    image: qiaseqresearch/umi-nea:latest
