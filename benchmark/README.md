@@ -4,7 +4,7 @@ We compared the performance of UMI-nea against both alignment based and alignmen
 
 ## Run simulation
 
-UMI-nea includes a module that performed simulations of UMI sequencing under different read types and library sizes with know clustering truth. We start this module from UMIc-seq simulation approach (Zurek et al., 2020). This module is used for comparing UMI-nea performance against other tools. To use this module, we provide a docker image.
+UMI-nea includes a module that performed simulations of UMI sequencing under different read types and library sizes with know clustering truth. We start this module from UMIc-seq simulation approach (https://github.com/fhlab/UMIC-seq/blob/master/figures/SuppFig1/simulate_UMI-length-errorrate.py). This module is used for comparing UMI-nea performance against other tools. To use this module, we provide a docker image.
 
 To pull docker image of umi-nea
 ```bash
