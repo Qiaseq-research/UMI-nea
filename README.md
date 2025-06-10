@@ -2,7 +2,7 @@
 
 UMI-nea is a alignment-free UMI deduplication tool designed to accurately and robustly quantify the absolute count of molecules in UMI-tagged sequencing libraries. 
 
-UMI-nea relies solely on UMI sequences and is optimized for computational efficiency, making it particularly suitable for reference free genomic applications such as TCR/BCR sequencing and large-scale UMI datasets.
+UMI-nea, which relies solely on UMI sequences and is optimized for computational efficiency, can be broadly applied to UMI-based workflows in both DNA-seq and RNA-seq
 
 
 ## Directories
