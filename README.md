@@ -4,6 +4,39 @@ UMI-nea is a alignment-free UMI deduplication tool designed to accurately and ro
 
 UMI-nea relies solely on UMI sequences and is optimized for computational efficiency, making it particularly suitable for reference free genomic applications such as TCR/BCR sequencing and large-scale UMI datasets.
 
+
+## Directories
+
+├── benchmark                                  # benchmark and simulation module
+│   ├── clustering_score.py
+│   ├── compare_tools.sh
+│   ├── plot_clonotype_UMI_count.py
+│   ├── plot_PCA.py
+│   ├── plot_runtime.py
+│   ├── plot_V-measure.py
+│   ├── README.md                              
+│   ├── simulate_UMI_indel.py
+│   ├── wrapper_runtime.sh
+│   └── wrapper.sh
+├── docker                                     # Dockerfile
+│   ├── docker-compose.yaml
+│   ├── Dockerfile
+│   ├── network.py
+│   ├── README.md
+│   ├── requirements.txt
+│   └── UMIC-seq.py
+├── README.md
+└── UMI-nea                                    # UMI-nea and helper scripts
+    ├── convert_to_fastq.sh
+    ├── edlib
+    ├── include
+    ├── LICENSE
+    ├── Makefile
+    ├── src
+    ├── UMI-nea_helper.sh
+    └── UMI-nea.main.cpp
+
+
 ## Installation
 
 UMI-nea has two ways to install. You can install UMI-nea directly through source code or use our docker image
