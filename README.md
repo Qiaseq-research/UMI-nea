@@ -226,11 +226,12 @@ bash convert_to_fastq.sh -f <UMI-extracted read1-file> -r <UMI-extracted read2-f
 #### Input files
 
 `UMI extracted fastq files`: UMI sequences extracted and attached to the end of readname with "_"
+```
 @read_a_1_GAGGTGGGTCAAGGATCGACAAAC
 GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCG
 +
 HGHHHHHHHHGGGGGGGGGGHHHHHH1GHHHHGHHHH
-
+```
 `UMI-nea output file`: A tab separated file with error corrected founder for each UMI sequences with below columns
 
 | Amplicon_ID | original UMI sequence | error corrected UMI sequence |
