@@ -7,6 +7,7 @@ UMI-nea relies solely on UMI sequences and is optimized for computational effici
 
 ## Directories
 
+```bash
 ├── benchmark                                  # benchmark and simulation module
 │   ├── clustering_score.py
 │   ├── compare_tools.sh
@@ -35,7 +36,7 @@ UMI-nea relies solely on UMI sequences and is optimized for computational effici
     ├── src
     ├── UMI-nea_helper.sh
     └── UMI-nea.main.cpp
-
+```
 
 ## Installation
 
