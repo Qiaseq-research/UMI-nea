@@ -31,16 +31,6 @@ double var(const vector<int> v)
       return (square_sum_of_difference / (len -1 ) );
 }
 
-double mad(const vector<int> v){
-      vector<double> diff;
-      double median_v=median(v);
-      for (auto &each: v){
-	    diff.push_back(abs(each-median_v) );
-      }
-      sort(diff.begin(), diff.end());
-      return median(diff);
-}
-
 int calculate_dist_upper_bound(float error_rate, int max_umi_len){
       float z;
       int alpha_i;
@@ -132,8 +122,7 @@ void do_kp( const string updated_count_file, int  min_read_founder, int kp_estim
 	e_out_file<<"KP_estimate\tON"<<endl;
 	e_out_file<<"median_rpu\t"<<median_rpu<<endl;
         e_out_file<<"rpu_cutoff\t"<<min_read_founder<<endl;
-        e_out_file<<"estimated_molecules\t"<<kp_estimated_molecule<<endl;
-	e_out_file<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
+	e_out_file<<"estimated_molecules\t"<<after_rpucut_molecule<<endl;
 }
 
 double lengthSquare(pair<double,double> X, pair<double,double> Y)
@@ -217,19 +206,18 @@ void fit_knee_plot (const string  filename, int & min_read_founder, int & kp_est
 
 }
 
-void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file){
-        fit_nb_model(updated_count_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu);
+void do_nb(const string  updated_count_file, float nb_lowertail_p,  int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file){
+        fit_nb_model(updated_count_file, nb_lowertail_p,  min_read_founder,  nb_estimated_molecule, median_rpu);
 	if (verbose)
         	cout<<"After UMI clustering:"<<"\t"<<"rpu_cutoff using NB model="<<min_read_founder<<"\t"<<"nb_estimate_molecules="<<nb_estimated_molecule<<"\t"<<"median_rpu="<<median_rpu<<endl;
 	e_out_file<<"NB_estimate\tON"<<endl;
 	e_out_file<<"median_rpu\t"<<median_rpu<<endl;
         e_out_file<<"rpu_cutoff\t"<<min_read_founder<<endl;
         e_out_file<<"estimated_molecules\t"<<nb_estimated_molecule<<endl;
-	e_out_file<<"after_rpu-cutoff_molecules\t"<<nb_estimated_molecule<<endl;
 
 }
 
-void fit_nb_model( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
+void fit_nb_model( const string  filename, float  p,  int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
       vector<int>  umi_data;
       vector<int> read_replicated_data;
       read_umi_data(filename, umi_data,read_replicated_data );

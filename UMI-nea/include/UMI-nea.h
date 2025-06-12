@@ -90,8 +90,6 @@ template<typename K, typename V>
         return multimap;
 }
 
-double mad  (const vector<int> v);
-
 double mean(const vector<int> v);
 
 double var(const vector<int> v);
@@ -102,11 +100,11 @@ int count_umi(const string filename);
 
 int calculate_dist_upper_bound(float error_rate, int max_umi_len);
 
-void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file);
+void do_nb(const string  updated_count_file, float nb_lowertail_p, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file);
 
 void do_kp( const string updated_count_file, int  min_read_founder, int kp_estimated_molecule, int kp_angle, int median_rpu, ofstream & e_out_file  );
 
-void fit_nb_model( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu);
+void fit_nb_model( const string  filename, float  p, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu);
 
 void fit_knee_plot ( const string  filename, int & min_read_founder, int & kp_estimated_molecule, int & kp_angle, int & median_rpu, int & after_rpucut_molecule );
 
