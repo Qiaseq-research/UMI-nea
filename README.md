@@ -101,13 +101,35 @@ docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearc
 ```
 or
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:12"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:18"
 ```
 
 #### Extract UMI output
 
-1. UMI-nea input
+Extract UMI on pair-end reads with UMI at 1:18 on R2
+1. UMI-nea input(no header)
+
+| Amplicon_ID | Unique UMI sequence | number of reads |
+|:-----------:|:-------------------:|:---------------:|
+|      1      |  TTTACAAGCACCCCATCA |        146      |
+
+
 2. UMI extracted fastqs with UMI sequences attached to the end of readname with "_"
+R1
+```
+@read-1_TTTACAAGCACCCCATCA
+TCACACACCCCGCGGCGGCGAGGCCTTAAATAGGGAAACGGCCTGAGGCGCGCGCGGGCCTGGAGCCGGGATCCGCCCTAGGGGCTCGGATCGCCGCGCGCTCGCCGCTCGCCCGCCAGCCCGCCCGTGGTCCGTGGCGGCGCGCTCCAC
++
+ABBBAFBA@B@BGGGGGGFDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/0BF?/<//2?G2FHD2GH2F222?<<110//--;@F9BBFD;..;-9BB/9.
+```
+
+R2
+```
+@read-1_TTTACAAGCACCCCATCA
+GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGATCCCGGCTCCAGGCCCGCGCGCGCCTCAGGCCGTTTCCCTATTTAAGGCCTCG
++
+FDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/0BF?/<//2?G2FHD2GH2F222?<<110//--;@F9BBFD;..;-9BB/9.
+```
 
 ### Clustering
 
@@ -142,40 +164,51 @@ To run UMI-nea clustering with quantification:
 
 #### Clustering input
 
-`<fname>.input`: A tab separated file with number of read for each unique UMI sequence
+`<fname>.input`: A tab separated file with number of read for each unique UMI sequence(no header)
 
 | Amplicon_ID | Unique UMI sequence | number of reads |
 |:-----------:|:-------------------:|:---------------:|
+|      1      |  TTTACAAGCACCCCATCA |        146      |
 
 #### Clustering output
 
-`<fname>`: A tab separated file with error corrected founder for each UMI sequences with below columns
+`<fname>`: A tab separated file with error corrected founder for each UMI sequences with below columns(no header)
 
 | Amplicon_ID | original UMI sequence | error corrected UMI sequence |
 |:-----------:|:---------------------:|:----------------------------:|
+|      1      |  TTTACAAGCACCCCATCA   |      TTTACAAGCACCCCATCA      |
 
 `<fname>.estimate`: Model estimated number of molecules from UMI clustering reuslt
 
-`<fname>.umi.reads.count`: A tab separated file with cluster size of each error corrected founder
+```
+NB_estimate     ON
+median_rpu      103
+rpu_cutoff      50
+estimated_molecules     1000
+
+```
+
+`<fname>.umi.reads.count`: A tab separated file with cluster size of each error corrected founder(no header)
 
 | Amplicon_ID | error corrected UMI sequence | number of reads |
 |:-----------:|:----------------------------:|:---------------:|
+|      1      |      TTTACAAGCACCCCATCA      |        154      |
 
 #### Example run
 
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -o sim1.clustered -l 19 -e 0.001
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -o sim1.clustered -l 19 -e 0.005
 ```
 ```
-
 ********************Input Parameters:************************
-inFile=../test/pN1000_oN100/sim_1000_100_ul18_err0.001/UMI-nea/sim1.input
-outFile=sim1.clustered
+inFile=sim1.input
+outFile=sim1.t48.clustered
 maxlenUMI = 19
-errorRate = 0.001
-maxdist = 1
+errorRate = 0.005
+maxdist = 2
 auto-Estimate = ON
-threads = 10
+min_ReadsPerUmi_founder  = 2
+threads = 48
 poolSize = 1000
 ********************************************
 
@@ -194,13 +227,14 @@ To run UMI-nea quantification only:
 ```bash
 docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
 ```
-Output
+#### Quantification Output
 
 ```
-NB_estimate     ON
-median_rpu      103
-rpu_cutoff      50
-estimated_molecules     1000
+KP_estimate     ON
+knee_angle      103
+median_rpu      93
+rpu_cutoff      2
+estimated_molecules     1506
 
 ```
 
@@ -231,10 +265,11 @@ GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCG
 +
 HGHHHHHHHHGGGGGGGGGGHHHHHH1GHHHHGHHHH
 ```
-`UMI-nea output file`: A tab separated file with error corrected founder for each UMI sequences with below columns
+`UMI-nea output file`: A tab separated file with error corrected founder for each UMI sequences with below columns(no header)
 
 | Amplicon_ID | original UMI sequence | error corrected UMI sequence |
 |:-----------:|:---------------------:|:----------------------------:|
+|      1      |  TTTACAAGCACCCCATCA   |      TTTACAAGCAACCCATCA      |
 
 #### Example run
 
@@ -246,4 +281,21 @@ docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearc
 Pair end
 ```bash
 docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f out.umi.R1.fastq -r out.umi.R2.fastq -u out.clustered"
+```
+#### Output files
+
+Pair end
+R1
+```
+@read-100_TTTACAAGCAACCCATCA
+TCACACACCCCGCGGCGGCGAGGCCTTAAATAGGGAAACGGCCTGAGGCGCGCGCGGGCCTGGAGCCGGGATCCGCCCTAGGGGCTCGGATCGCCGCGCGCTCGCCGCTCGCCCGCCAGCCCGCCCGTGGTCCGTGGCGGCGCGCTCCAC
++
+ABBBAFBA@B@BGGGGGGFDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/0BF?/<//2?G2FHD2GH2F222?<<110//--;@F9BBFD;..;-9BB/9.
+```
+R2
+```
+@read-100_TTTACAAGCAACCCATCA
+GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGATCCCGGCTCCAGGCCCGCGCGCGCCTCAGGCCGTTTCCCTATTTAAGGCCTCG
++
+FDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/0BF?/<//2?G2FHD2GH2F222?<<110//--;@F9BBFD;..;-9BB/9.
 ```
