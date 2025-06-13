@@ -1,6 +1,6 @@
 # UMI-nea
 
-UMI-nea is a alignment-free UMI deduplication tool designed to accurately and robustly quantify the absolute count of molecules in UMI-tagged sequencing libraries. 
+UMI-nea is a reference-free UMI deduplication tool designed to accurately and robustly quantify the absolute count of molecules in UMI-tagged sequencing libraries. 
 
 UMI-nea, which relies solely on UMI sequences and is optimized for computational efficiency, can be broadly applied to UMI-based workflows in both DNA-seq and RNA-seq
 
@@ -196,12 +196,10 @@ docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearc
 Output
 
 ```
-KP_estimate     ON
-knee_angle      113
-median_rpu      101
-rpu_cutoff      2
-estimated_molecules     1091
-after_rpu-cutoff_molecules      1022
+NB_estimate     ON
+median_rpu      103
+rpu_cutoff      50
+estimated_molecules     1000
 
 ```
 
