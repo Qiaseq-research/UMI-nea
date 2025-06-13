@@ -175,7 +175,7 @@ To run UMI-nea clustering with quantification:
 
 | Amplicon_ID | Unique UMI sequence | number of reads |
 |:-----------:|:-------------------:|:---------------:|
-|      1      |  TTTACAAGCACCCCATCA |        146      |
+|      1      |  TTTACAAGCAACCCATCA |        146      |
 
 #### Clustering output
 
@@ -183,7 +183,7 @@ To run UMI-nea clustering with quantification:
 
 | Amplicon_ID | original UMI sequence | error corrected UMI sequence |
 |:-----------:|:---------------------:|:----------------------------:|
-|      1      |  TTTACAAGCACCCCATCA   |      TTTACAAGCACCCCATCA      |
+|      1      |  TTTACAAGCACCCCATCA   |      TTTACAAGCAACCCATCA      |
 
 `<fname>.estimate`: Model estimated number of molecules from UMI clustering reuslt
 
@@ -199,7 +199,7 @@ estimated_molecules     1000
 
 | Amplicon_ID | error corrected UMI sequence | number of reads |
 |:-----------:|:----------------------------:|:---------------:|
-|      1      |      TTTACAAGCACCCCATCA      |        154      |
+|      1      |      TTTACAAGCAACCCATCA      |        154      |
 
 #### Example run
 
