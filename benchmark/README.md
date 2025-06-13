@@ -49,7 +49,9 @@ docker run --name <umi-nea-container-name> \
 #### Example run
 
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "python /Download/UMI-nea/benchmark/simulate_UMI_indel.py sim 18 0.005 10000 100 1 1-1-40 2"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser \
+ qiaseqresearch/umi-nea:latest bash -c "python /Download/UMI-nea/benchmark/simulate_UMI_indel.py \
+ sim 18 0.005 10000 100 1 1-1-40 2"
 ```
 
 ### Benchmark tools
@@ -58,7 +60,12 @@ To comapre V-measure and runtime of the 4 tools, we include a benchmark script t
 
 To run benchmark using docker image
 ```bash
-docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/benchmark/compare_tools.sh <umi_len> <err_rate> <num_founder> <num_children> <num_replicates> <include_indel> <mutation_ratio> <edit_distance> <umic_threshold> <thread> <dispersion> <tools_to_compare>"
+docker run --name <umi-nea-container-name> \
+ -v ${PWD}:/home/qiauser -w /home/qiauser \
+ qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/benchmark/compare_tools.sh \
+ <umi_len> <err_rate> <num_founder> <num_children> <num_replicates> \
+ <include_indel> <mutation_ratio> <edit_distance> <umic_threshold> \
+ <thread> <dispersion> <tools_to_compare>"
 ``` 
 
 #### Benchmark parameters required
@@ -110,6 +117,8 @@ docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiau
 #### Example run
 
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/benchmark/compare_tools.sh 18 0.005 10000 100 3 1 1-1-40 0 0 48 2 UMI-nea,umi-tools,UMIC-seq,calib"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser \
+ qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/benchmark/compare_tools.sh \
+ 18 0.005 10000 100 3 1 1-1-40 0 0 48 2 UMI-nea,umi-tools,UMIC-seq,calib"
 ```
 
