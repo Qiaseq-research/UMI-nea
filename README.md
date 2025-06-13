@@ -126,18 +126,19 @@ To run UMI-nea clustering with quantification:
 
 ##### optional
 
-4. `--minC -m <int|default:2>`: Min levenshtein distance cutoff, overruled by -e
-5. `--errorR -e <float|default:none>`: If set, -m will be calculated based on binomial CI, override -m
+4. `--maxC -m <int|default:1>`: Max levenshtein distance cutoff within UMI cluster; if set -m do not set -e
+5. `--errorR -e <float (0,1]|default:0.001>`: If set -e, do not set -m and maxC -m will be calculated based on binomial CI
 6. `--minF -f <int|default:1>`: Min reads count for a UMI to be founder, overruled by -a or -n or -k
 7. `--nb -n <default:false>`: Apply negative binomial model to decide min reads for a founder, override -f
 8. `--kp -k <default:false>`: Apply knee plot to decide min reads for a founder, override -f
 9. `--auto -a <default:true>`: Combine knee plot strategy and negative binomial model to decide min reads for a founder, override -f
 10. `--just -j <default:false>`: Just estimate molecule number and rpu cutoff
-11. `--prob -q <float|default:0.001>`: probability for nb lower tail quantile cutoff in quantification
-12. `--greedy -d <default:false>`: Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not recommended!
-13. `--thread -t <int|default:10>`: Num of thread to use, minimal 2
-14. `--pool -p <int|default:1000>`: Total UMIs to process in each thread at one time
-15. `--help -h`: Show help
+11. `--prob -q <float|default:0.001>`: probability for nb lower tail quantile cutoff in quantification! Not reommended to change
+12. `--angle -b <default:120>`: minimal angle for knee point
+13. `--greedy -g <default:false>`: Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not recommended!
+14. `--thread -t <int|default:10>`: Num of thread to use, minimal 2
+15. `--pool -p <int|default:1000>`: Total UMIs to process in each thread at one time
+16. `--help -h`: Show help
 
 #### Clustering input
 
