@@ -201,7 +201,6 @@ NB_estimate     ON
 median_rpu      103
 rpu_cutoff      50
 estimated_molecules     1000
-
 ```
 
 `<fname>.umi.reads.count`: A tab separated file with cluster size of each error corrected founder(no header)
@@ -241,8 +240,8 @@ To run UMI-nea quantification only:
 #### Example run
 
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
- /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser \
+ qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
 ```
 #### Quantification Output
 
@@ -252,7 +251,6 @@ knee_angle      103
 median_rpu      93
 rpu_cutoff      2
 estimated_molecules     1506
-
 ```
 
 ### Generate output fastq
