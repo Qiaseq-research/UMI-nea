@@ -62,7 +62,8 @@ docker pull qiaseqresearch/umi-nea:latest
 ```
 To run UMI-nea in docker container:
 ```bash
-docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea
+docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiauser \
+ qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea
 ```
 
 ## Run UMI-nea
@@ -92,23 +93,27 @@ bash UMI-nea_helper.sh -f <read1-file> -a <position> -r <read2-file> -b <positio
 
 Single end
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.fastq -a 1:12"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.fastq -a 1:12"
 ```
 
 Pair end
 Both R1 and R2 has UMI sequence
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -a 1:8 -r test.R2.fastq -b 1:8"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -a 1:8 -r test.R2.fastq -b 1:8"
 ```
 
 Only R1 has UMI sequence
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -a 1:18"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -a 1:18"
 ```
 
 Only R2 has UMI sequence
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:18"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:18"
 ```
 
 #### Extract UMI output
@@ -232,7 +237,8 @@ To run UMI-nea quantification only:
 #### Example run
 
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ /Download/UMI-nea/UMI-nea/UMI-nea -i sim1.input -j
 ```
 #### Quantification Output
 
@@ -283,12 +289,14 @@ FDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/
 
 Single end
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/convert_to_fastq.sh -f out.umi.R1.fastq -u out.clustered"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/convert_to_fastq.sh -f out.umi.R1.fastq -u out.clustered"
 ```
 
 Pair end
 ```bash
-docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f out.umi.R1.fastq -r out.umi.R2.fastq -u out.clustered"
+docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f out.umi.R1.fastq -r out.umi.R2.fastq -u out.clustered"
 ```
 #### Output files
 

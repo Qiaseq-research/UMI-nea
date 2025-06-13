@@ -15,16 +15,20 @@ docker pull qiaseqresearch/umi-nea:latest
 
 To run generate a simuation dataset using docker image
 ```bash
-docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "python /Download/UMI-nea/benchmark/simulate_UMI_indel.py <output-file> <umi_len> <err_rate> <num_founder> <num_children> <include_indel> <mutation_ratio> <dispersion>"
+docker run --name <umi-nea-container-name> \
+ -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest \
+ bash -c "python /Download/UMI-nea/benchmark/simulate_UMI_indel.py \
+ <output-file> <umi_len> <err_rate> <num_founder> <num_children> \
+ <include_indel> <mutation_ratio> <dispersion>"
 ```
 
 #### Simulation parameters required
 
 1. `output-file <str>`: Output file name
 2. `umi_len <int>`: UMI length
-3. `err_rate <float>`: per UMI base error rate raneg from 0-1
+3. `err_rate <float>`: per UMI base error rate range from 0-1
 4. `num_founder <int>`: Number of founder UMI to simulate
-5. `num_children <int>`: Number of progeny UMI to simulate
+5. `num_children <int>`: Number of progeny UMI per founder to simulate
 6. `include_indel <int>`: 1 for including insertion and deletion errors, 0 for substitution only
 7. `mutation_ratio <int-int-int>`: Ratio of number of insertion-deletion-substitution
 8. `dispersion <float>`: Ratio of variance/mean of negative bionomial distribution of number of progeny UMI
@@ -70,6 +74,7 @@ docker run --name <umi-nea-container-name> -v ${PWD}:/home/qiauser -w /home/qiau
 9. `umic_threshold <int>`: Alignment threshold for UMIC-seq, set to 0 for UMIC-seq to determine by itself
 10. `thread <int>`: Number of thread to use, minimal 2
 11. `dispersion <float>`: Ratio of variance/mean of negative bionomial distribution of number of progeny UMI
+12. `tools_to_compare <str>`: tools separated in comma. 
 
 #### Benchmark output
 
