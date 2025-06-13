@@ -96,10 +96,11 @@ docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearc
 ```
 
 Pair end
+both R1 and R2 has UMI sequence
 ```bash
 docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -a 1:8 -r test.R2.fastq -b 1:8"
 ```
-or
+Only R2 has UMI sequence
 ```bash
 docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser qiaseqresearch/umi-nea:latest bash -c "bash /Download/UMI-nea/UMI-nea/UMI-nea_helper.sh -f test.R1.fastq -r test.R2.fastq -b 1:18"
 ```
