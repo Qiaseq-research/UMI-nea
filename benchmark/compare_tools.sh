@@ -184,7 +184,7 @@ for rep in `seq 1 $num_rep`; do
     bp_del=`echo $elist | awk '{print $2}'`
     bp_sub=`echo $elist | awk '{print $3}'`
     bp_idl=`echo "$bp_ins+$bp_del" | bc`
-    bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk '{a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f-",$1/a;printf "%3.3f-",$2/a;printf "%3.3f",$3/a}'`
+    bp_ratio=`echo "$bp_ins $bp_del $bp_sub" | awk -v ind=$do_indel '{if(ind>0){a=$1;for(i=1;i<=3;i++){a=($i<a?$i:a)};printf "%3.3f-",$1/a;printf "%3.3f-",$2/a;printf "%3.3f",$3/a}else{print "NA"}}'`
     uniq_umi=`cat sim${rep}.out | cut -f1 | sort | uniq | wc -l`
 
 : <<'END'
