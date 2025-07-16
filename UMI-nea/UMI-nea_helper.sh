@@ -37,7 +37,7 @@ else
     l2_e=0
 fi
 
-if [ $r1 == *".gz" ]; then
+if [[ $r1 == *".gz" ]]; then
     r1_name=`basename $r1 | sed 's/fq.gz//' | sed 's/.fastq.gz//'`
     zcat $r1 | paste - - - - | awk -v s=$l1_s -v e=$l1_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R1.txt
 else
@@ -46,7 +46,7 @@ else
 fi
 
 if [ $r2 != "NA" ]; then
-    if [ $r2 == *".gz" ]; then
+    if [[ $r2 == *".gz" ]]; then
         r2_name=`basename $r2 | sed 's/fq.gz//' | sed 's/.fastq.gz//'`
         zcat $r2 | paste - - - - | awk -v s=$l2_s -v e=$l2_e -v OFS="\t" '{u=substr($2,s,(e-s));print $1,u,substr($2,e,length($2)),"+",substr($4,e,length($4))}' > $outname.umi.R2.txt
     else
