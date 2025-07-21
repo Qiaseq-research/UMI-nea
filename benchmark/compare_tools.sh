@@ -48,7 +48,7 @@ run_UMI-nea() {
         if [ ! -f UMI-nea/sim${rep}.input ]; then
             cat sim${rep}.out | cut -f1 | sort | uniq -c | awk '{print "1\t"$2"\t"$1}' | sort -k3,3nr > UMI-nea/sim${rep}.input
         fi
-        maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length()}' | sort -nr | head -1`
+        maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length($1)}' | sort -nr | head -1`
         echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
         if [ $dist -eq 0 ]; then
             { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time

@@ -304,6 +304,7 @@ docker run --name umi_nea -v ${PWD}:/home/qiauser -w /home/qiauser \
 ```
 #### Output files
 
+UMI extracted fastqs with error corrected UMI sequences attached to the end of readname with "_"
 Pair end
 R1
 ```

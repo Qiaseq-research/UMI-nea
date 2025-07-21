@@ -1,0 +1,4 @@
+NB_estimate	ON
+median_rpu	23
+rpu_cutoff	3
+estimated_molecules	1000
