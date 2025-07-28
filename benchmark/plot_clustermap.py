@@ -12,10 +12,10 @@ df['feature'] = (
     df['clonotype'].astype(str)
 )
 tools_ord = ["Calib","UMIc-seq","UMI-tools","UMI-nea", "MiXCR"]
-colors = sns.color_palette(["#DDA0DD","#E6C290","#9FD88E","#4775BF","#FF8888"])
 df['tools'] = pd.Categorical(df['tools'],categories=tools_ord,ordered=True)
 df = df.sort_values(by=["tools"])
 tool_matrix = df.pivot(index='tools', columns='feature', values='number of UMI')
+corr_matrix = tool_matrix.T.corr()
 plt.figure(figsize=(10, 8))
 g = sns.clustermap(
     corr_matrix,
