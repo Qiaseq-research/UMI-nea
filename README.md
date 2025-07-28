@@ -19,6 +19,9 @@ UMI-nea, which relies solely on UMI sequences and is optimized for computational
 │   ├── simulate_UMI_indel.py
 │   ├── wrapper_runtime.sh
 │   └── wrapper.sh
+├── datafiles
+│   ├── TCR_data                               # real TCR data
+│   └── UMI-nea_testfiles                      # test files for UMI-nea and UMI-nea helper scripts
 ├── docker                                     # Dockerfile
 │   ├── docker-compose.yaml
 │   ├── Dockerfile
@@ -320,3 +323,13 @@ GTGGAGCGCGCCGCCACGGACCACGGGCGGGCTGGCGGGCGAGCGGCGAGCGCGCGGCGATCCGAGCCCCTAGGGCGGAT
 +
 FDGGFHF5G53AFGGFBGHH22AA0AAEGC10F?001EF2?EGHHGGFB43FE3FDGB333F@/F//0?B/E/F2??G?/0BF?/<//2?G2FHD2GH2F222?<<110//--;@F9BBFD;..;-9BB/9.
 ```
+
+## TCR datasets
+
+The real TCR data can be download from azure blob storage, Please see `datafiles/TCR_data/sampleinfo.csv` for download link 
+
+or use Azcopy command
+
+`azcopy copy "https://qiagenpublic.blob.core.windows.net/umi-nea-datasets/Miseq/" "<local folder path>" --recursive`
+
+`azcopy copy "https://qiagenpublic.blob.core.windows.net/umi-nea-datasets/Nextseq2000/" "<local folder path>" --recursive`
