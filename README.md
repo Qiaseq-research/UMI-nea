@@ -162,8 +162,8 @@ To run UMI-nea clustering with quantification:
 ##### required
 
 1. `--maxL -l <int|default:-1>`: Max length of UMI, longer UMIs will be trimmed to the length set! Required to set for UMI clustering
-2. `--in -i <fname>`: Input file, a tab delim file with three cols: GroupID, UMI, NumofReads, sorted in descending by NumofReads
-3. `--out -o <fname>`: Output file, output has three cols, GroupID, UMI, FounderUMI
+2. `--in -i <fname>`: Input file, a tab delim file with three cols: Amplicon ID, UMI, NumofReads, sorted in descending by NumofReads
+3. `--out -o <fname>`: Output file, output has three cols, Amplicon ID, UMI, FounderUMI
 
 ##### optional
 
