@@ -3,7 +3,7 @@
 //global variable
 mutex mut;
 atomic_int founder_added{0};
-chrono::milliseconds span (1);
+// Removed global span; poll loop in parallel_processing now uses non-blocking wait_for(0) + 10µs sleep.
 guardedvector founders;
 bool producer_done=false;
 const int N_num=3;
@@ -103,8 +103,7 @@ void read_umi_data(const string  filename, vector<int> & umi_data, vector<int> &
       int read_count;
       while (in_file>>primer_id>>umi>>read_count) {
             if (read_count > 0 ) {
-                vector <int> repeatn = repeat_n (read_count);
-                read_replicated_data.insert(read_replicated_data.end(), repeatn.begin(), repeatn.end()) ;
+                read_replicated_data.insert(read_replicated_data.end(), read_count, read_count);
                 umi_data.push_back(read_count);
             }
       }
@@ -259,14 +258,14 @@ void fit_nb_model( const string  filename, float  p,  int & min_read_founder, in
       nb_estimated_molecule=umi_filtered_data.size();
 }
 
-void shared_writer(ofstream& out, const vector<string> lines)
+void shared_writer(ofstream& out, const vector<string>& lines)
 {
       lock_guard<mutex> lock(mut);
-      for (string line : lines)
+      for (const string& line : lines)
 	    out << line;
 }
 
-bool align_umi( string umi, string f,  int max_dist, int & endpos, int & dist){
+bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist){
       EdlibAlignMode mode = EDLIB_MODE_HW;
       EdlibAlignTask task = EDLIB_TASK_DISTANCE;
       EdlibAlignConfig edlib_AlignConfig = {max_dist, mode, task, NULL, 0};
@@ -291,38 +290,61 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 
       int founder_clustered=0;
       vector <string> lines;
+      // Incrementally extend cached padded founder string (starting from founder 0) to avoid
+      // O(N*F) stringstream rebuild. For UMIs with non-zero founder_offset, a substring of
+      // padded_cached starting at that offset is used so the index calculation stays correct.
+      string padded_cached = padding;
+      int cached_count = 0;
+      string target_scratch;  // reused buffer for UMIs with founder_offset > 0
       for (auto const & u: umi_pool_subset){
 	    int offset = u.founder_offset;
-	    string umi = u.UMI_seq;
+	    const string& umi = u.UMI_seq;
 	    //new founder being found:
-	    string line = primer_id + "\t" + umi + "\t" + umi + "\n";
+	    string line;
+	    line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
+	    line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
 	    bool clustered = false;
 	    if (founder_added>0){
-		  stringstream ss;
-		  for (int i = offset; i < founders.myvector.size(); ++i) {
-			ss<<left<<setfill('N')<<setw(max_umi_len+3)<<founders.myvector[i];
+		  int curr_size = founders.myvector.size();
+		  if (curr_size > cached_count) {
+			for (int i = cached_count; i < curr_size; ++i) {
+			      const string& f = founders.myvector[i];
+			      padded_cached.append(f);
+			      padded_cached.append(max_umi_len + N_num - f.size(), 'N');
+			}
+			cached_count = curr_size;
 		  }
-		  string founder_string=ss.str();
+		  // Build target starting from founder[offset]: "NNN" + padded_cached[N_num + offset*(slot)]
+		  // This keeps the index formula (endpos-N_num)/(slot)+offset correct.
+		  const string* target_ptr;
+		  if (offset == 0) {
+			target_ptr = &padded_cached;
+		  } else {
+			size_t byte_start = N_num + (size_t)offset * (max_umi_len + N_num);
+			target_scratch.clear();
+			if (byte_start < padded_cached.size()) {
+			      target_scratch.reserve(N_num + padded_cached.size() - byte_start);
+			      target_scratch = padding;
+			      target_scratch.append(padded_cached, byte_start, string::npos);
+			}
+			target_ptr = &target_scratch;
+		  }
 		  int endpos;
 		  int dist;
-		  if (align_umi(padding+umi+padding, padding+founder_string, max_dist, endpos, dist )) {
+		  if (!target_ptr->empty() && align_umi(u.padded_umi, *target_ptr, max_dist, endpos, dist )) {
 			founder_clustered++;
 			int ind=(endpos-N_num)/(max_umi_len+N_num)+offset;
-			string clustered_founder=founders.myvector[ind];
-			if (u.founder_temp_found  && dist<u.founder_temp_dist )
-			      //Real founder being found, replace temp founder
-			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
-			else if (u.founder_temp_found  && dist>=u.founder_temp_dist ){
-			      //After checking all UMI in the front line, temp founder seems to be better
-			      line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
-			}
-			else
-			      //No temp founder for UMI but founder being found now
-			      line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
+			const string& clustered_founder=founders.myvector[ind];
+			const string& chosen = (u.founder_temp_found && dist >= u.founder_temp_dist) ? u.founder_temp : clustered_founder;
+			line.clear();
+			line.reserve(primer_id.size() + 2 + umi.size() + 2 + chosen.size() + 1);
+			line = primer_id; line += '\t'; line += umi; line += '\t'; line += chosen; line += '\n';
 		  }
 		  else if (u.founder_temp_found ){
 			//After checking all UMI in the front line, only option is to choose  temp founder
-			line = primer_id + "\t" + umi + "\t" + u.founder_temp + "\n";
+			line.clear();
+			line.reserve(primer_id.size() + 2 + umi.size() + 2 + u.founder_temp.size() + 1);
+			line = primer_id; line += '\t'; line += umi; line += '\t'; line += u.founder_temp; line += '\n';
 		  }
 		  else{
 			founders.guard.lock();
@@ -356,17 +378,16 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
       return true;
 }
 
-vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, map<int, vector<UMI_item>>  t_umi)
+vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size)
 {
 
       int stop_search_dist=1;
       if (first_founder_mode)
 	    stop_search_dist=max_dist;
-      vector<UMI_item> umi_pool_subset=t_umi[worker_index];
       if (umi_pool_subset.size()==0){
 	    return umi_pool_subset;
       }
-      int write_every=ceil(t_umi.size()/100)>10?ceil(t_umi.size()/100):10;
+      int write_every=10;
       vector <string> lines;
       vector<UMI_item> updated_subset;
       int founders_start_offset=0;
@@ -375,7 +396,7 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
       if (first_founder_mode)
 	    step_size_big=0;
       else
-	    step_size_big=t_umi.size()/10;
+	    step_size_big=t_umi_size/10;
       int step_size;
       int last_cycle_founders_size = founders.size_last_cycle;
       while (true) {
@@ -413,32 +434,56 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 			continue;
 		  }
 	    }
+	    // Build padded founder string once per cycle; all UMIs with byte_start==0 share it.
+	    string full_founder_string;
+	    full_founder_string.reserve((size_t)step_size * (max_umi_len + N_num));
+	    for (int i = 0; i < step_size; ++i) {
+		  const string& fi = founder_view[i];
+		  full_founder_string.append(fi);
+		  full_founder_string.append(max_umi_len + N_num - fi.size(), 'N');
+	    }
+	    string padded_full;
+	    padded_full.reserve(N_num + full_founder_string.size());
+	    padded_full = padding;
+	    padded_full += full_founder_string;
+	    string padded_f_scratch;  // reused buffer for UMIs with non-zero byte_start
 	    for (int j = 0; j < umi_pool_subset.size(); ++j) {
-		  UMI_item one_umi = umi_pool_subset[j];
-		  string umi = one_umi.UMI_seq;
-		  int offset = one_umi.founder_offset;
-		  stringstream ss;
-		  string founder_string;
-		  for (int i = offset-founders_start_offset; i < step_size; ++i) {
-			ss<<left<<setfill('N')<<setw(max_umi_len+3)<<founder_view[i];
+		  const UMI_item& one_umi_ref = umi_pool_subset[j];
+		  const string& umi = one_umi_ref.UMI_seq;
+		  int offset = one_umi_ref.founder_offset;
+		  int relative_start = offset - founders_start_offset;
+		  size_t byte_start = (size_t)relative_start * (max_umi_len + N_num);
+		  // Common case: all UMIs in the first cycle have byte_start==0 and share padded_full.
+		  // Minority case: reuse padded_f_scratch to avoid repeated malloc/free per UMI.
+		  const string* target_ptr;
+		  if (byte_start == 0) {
+			target_ptr = &padded_full;
+		  } else {
+			padded_f_scratch.clear();
+			padded_f_scratch.reserve(N_num + full_founder_string.size() - byte_start);
+			padded_f_scratch = padding;
+			padded_f_scratch.append(full_founder_string, byte_start, string::npos);
+			target_ptr = &padded_f_scratch;
 		  }
-		  founder_string=ss.str();
 		  int endpos;
 		  int dist;
-		  if (align_umi( padding+umi+padding, padding+founder_string,  max_dist, endpos, dist)) {
-			int ind=(endpos-N_num)/(max_umi_len+N_num) + offset-founders_start_offset  ;
-			string clustered_founder=founder_view[ind];
+		  if (align_umi(one_umi_ref.padded_umi, *target_ptr, max_dist, endpos, dist)) {
+			int ind=(endpos-N_num)/(max_umi_len+N_num) + relative_start;
+			const string& clustered_founder=founder_view[ind];
 
 			if (dist<=stop_search_dist){
 			      //founder being found in consumer pool as the distance to founder <= 1 or if first founder mode is on and dist is <= cutoff
-			      string line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
-			      lines.push_back(line);
+			      string line;
+			      line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
+			      line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
+			      lines.push_back(std::move(line));
 			      if (lines.size()>=write_every){
 				    shared_writer(out, lines);
 				    lines.clear();
 			      }
 			}
 			else {
+			      UMI_item one_umi = one_umi_ref;
 			      if( (!one_umi.founder_temp_found ) || (one_umi.founder_temp_found  && dist<one_umi.founder_temp_dist )  ){
 				    one_umi.founder_temp_found=true;
 				    one_umi.founder_temp=clustered_founder;
@@ -448,15 +493,16 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 				    one_umi.founder_offset += step_size;
 			      else
 				    one_umi.founder_offset = last_cycle_founders_size;
-			      updated_subset.push_back(one_umi);
+			      updated_subset.push_back(std::move(one_umi));
 			}
 		  }
 		  else{
+			UMI_item one_umi = one_umi_ref;
 			if (step_size!=last_cycle_founders_size)
 			      one_umi.founder_offset += step_size;
 			else
 			      one_umi.founder_offset = last_cycle_founders_size;
-			updated_subset.push_back(one_umi);
+			updated_subset.push_back(std::move(one_umi));
 		  }
 		  if  (!first_founder_mode && producer_done ){ //when -d is not set and producer is done, we can exit loop now and will not affect resluts reproduciblity
 			updated_subset.insert(updated_subset.end(), umi_pool_subset.begin()+j+1, umi_pool_subset.end());
@@ -540,7 +586,9 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
       producer_done=false;
       vector<UMI_item> updated_umi_pool;
       map<int, vector<UMI_item>> t_umis;
+      map<int, vector<UMI_item>> consumer_results;
       vector<future<vector<UMI_item>>> cl_consumers;
+      const int t_umi_size = num_worker_threads - 1;
 
       vector<UMI_item> umi_pool_subset(umi_pool.begin(), umi_pool.begin()+min(static_cast<unsigned long>(thread_founder_ends[0]) , umi_pool.size()));
       shared_future<bool>  fp_producer = async(launch::async, [umi_pool_subset, &out, curr_primer_id,max_dist, max_umi_len]{return producer( cref(umi_pool_subset), out, curr_primer_id, max_dist, max_umi_len);});
@@ -559,7 +607,8 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 
       for (int i = 1; i < num_worker_threads; i++) {
 	    if (t_umis[i].size()>0)
-		  cl_consumers.push_back(async(launch::async, [i,&out,first_founder_mode, curr_primer_id,max_dist,max_umi_len, t_umis]{return consumer(i,  out, first_founder_mode, curr_primer_id, max_dist, max_umi_len, t_umis ); } ) ) ;
+		  // Capture only this thread's vector (not the whole map) to avoid N full-map copies.
+		  cl_consumers.push_back(async(launch::async, [i,&out,first_founder_mode, curr_primer_id,max_dist,max_umi_len, v=t_umis[i], t_umi_size]{return consumer(i, out, first_founder_mode, curr_primer_id, max_dist, max_umi_len, std::move(v), t_umi_size); } ) ) ;
 
       }
       vector<bool> thread_done_bits(cl_consumers.size()+1, false);
@@ -568,20 +617,23 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 	    if (producer_done){
 		  thread_done_bits[0]=true;
 	    }
-	    for (int i = 1; i <= cl_consumers.size(); i++) {
+	    for (int i = 1; i <= (int)cl_consumers.size(); i++) {
 		  if ( thread_done_bits[i] ||  t_umis[i].size()==0){
 			thread_done_bits[i]=true;
 			continue;
 		  }
-		  else if (cl_consumers[i-1].wait_for(span) == future_status::ready && cl_consumers[i-1].valid()) {
+		  // Non-blocking check; avoids blocking 1ms × N_threads per poll iteration.
+		  else if (cl_consumers[i-1].wait_for(chrono::seconds(0)) == future_status::ready && cl_consumers[i-1].valid()) {
 			thread_done_bits[i]=true;
-			t_umis[i]=cl_consumers[i-1].get();
+			consumer_results[i]=cl_consumers[i-1].get();
 		  }
 	    }
 	    thread_done = count(thread_done_bits.begin(), thread_done_bits.end(), true);
+	    if (thread_done < (int)cl_consumers.size()+1)
+		  this_thread::sleep_for(chrono::microseconds(10));
       }
-      for (int i = 1; i <= t_umis.size(); i++) {
-	    updated_umi_pool.insert(updated_umi_pool.end(), t_umis[i].begin(), t_umis[i].end());
+      for (int i = 1; i <= (int)t_umis.size(); i++) {
+	    updated_umi_pool.insert(updated_umi_pool.end(), consumer_results[i].begin(), consumer_results[i].end());
       }
       umi_pool = updated_umi_pool;
 }
@@ -591,28 +643,30 @@ void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id
       vector <string> lines;
 
       vector <string> founder_view={founders.myvector.begin(), founders.myvector.end()};
+      // Build founder string once — founders don't change during this function.
+      string padded_founder = padding;
+      padded_founder.reserve(N_num + founder_view.size() * (max_umi_len + N_num));
+      for (const string& f : founder_view) {
+	    padded_founder.append(f);
+	    padded_founder.append(max_umi_len + N_num - f.size(), 'N');
+      }
       for (int j = 0; j < umi_pool.size(); ++j) {
-	    UMI_item one_umi = umi_pool[j];
-	    string umi = one_umi.UMI_seq;
-	    int offset = one_umi.founder_offset;
-	    stringstream ss;
-	    for (int i = 0; i < founder_view.size(); ++i) {
-		  ss<<left<<setfill('N')<<setw(max_umi_len+3)<<founder_view[i];
-	    }
-	    string founder_string=ss.str();
-
+	    const UMI_item& one_umi = umi_pool[j];
+	    const string& umi = one_umi.UMI_seq;
 	    int endpos;
 	    int dist;
 	    string line;
-	    if (align_umi( padding+umi+padding, padding+founder_string,  max_dist, endpos, dist)) {
+	    if (align_umi(one_umi.padded_umi, padded_founder, max_dist, endpos, dist)) {
 		  int ind=(endpos-N_num)/(max_umi_len+N_num)  ;
-		  string clustered_founder=founder_view[ind];
+		  const string& clustered_founder=founder_view[ind];
 		  //founder being found for UMIs not qualified for founder for other UMIs
-		  line = primer_id + "\t" + umi + "\t" + clustered_founder + "\n";
+		  line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
+		  line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
 	    }
 	    else{
 		  //no exising founder being found, this UMI is the founder for itself
-		  line = primer_id + "\t" + umi + "\t" + umi + "\n";
+		  line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
+		  line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
 	    }
 	    lines.push_back(line);
 	    if (lines.size()>=write_every){
@@ -626,25 +680,21 @@ void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id
       }
 }
 
-void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, string curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  ){
-      map<int, vector<UMI_item>> t_umis;
+void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, const string& curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  ){
       int subpool_size=ceil(low_reads_umi_pool.size()*1.0/num_worker_threads);
-      for (int i = 0; i < num_worker_threads; i++) {
-	    int first = i*subpool_size < low_reads_umi_pool.size() ? i*subpool_size : low_reads_umi_pool.size() ;
-	    int last = (i+1)*subpool_size<low_reads_umi_pool.size()?(i+1)*subpool_size:low_reads_umi_pool.size() ;
-	    vector<UMI_item> one_d_umis;
-	    one_d_umis={low_reads_umi_pool.begin()+first, low_reads_umi_pool.begin()+last};
-	    t_umis[i]=one_d_umis;
+      vector<vector<UMI_item>> t_umis(num_worker_threads);
+      for (int i = 0; i < (int)num_worker_threads; i++) {
+	    int first = min((size_t)(i*subpool_size), low_reads_umi_pool.size());
+	    int last = min((size_t)((i+1)*subpool_size), low_reads_umi_pool.size());
+	    t_umis[i].assign(low_reads_umi_pool.begin()+first, low_reads_umi_pool.begin()+last);
       }
 
       vector<thread> threads;
-
-      for (int i = 0; i < num_worker_threads; i++) {
-	    threads.push_back(thread(founder_find, ref(t_umis[i]) , ref(out), curr_primer_id, max_dist, max_umi_len,  i ));
+      for (int i = 0; i < (int)num_worker_threads; i++) {
+	    threads.push_back(thread(founder_find, ref(t_umis[i]), ref(out), curr_primer_id, max_dist, max_umi_len, i));
       }
-      for (auto &th : threads) {
+      for (auto &th : threads)
 	    th.join();
-      }
 }
 
 void clustering_umis(const string in_filename, const string out_filename,  UMI_clustering_parameters parameters )
@@ -684,6 +734,7 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    if (umi.length()>max_umi_len)
 		  umi.resize(max_umi_len);
 	    one_umi.UMI_seq = umi;
+	    one_umi.padded_umi = padding + umi + padding;
 	    one_umi.founder_offset = 0;
 	    if (read_count < min_read_founder ){ //reach the line where the read count for umi less than the minimal requirement of founder
 		  while (!umi_pool.empty()) { //finish current umi_pool processing first
@@ -734,7 +785,7 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 }
 
 void update_umi_reads_count(const string updated_count_filename, const string in_filename, const string out_filename){
-	map <string, int> umi_count;
+	unordered_map<string, int> umi_count;
 	ifstream in_file(in_filename, ios::in )  ;
 	if(in_file.fail()){
 		cerr<<"input file: "<<in_filename <<" not readable"<<endl;

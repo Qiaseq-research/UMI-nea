@@ -1,4 +1,3 @@
-#include <condition_variable>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -9,8 +8,8 @@
 #include <mutex>
 #include <algorithm>
 #include <iostream>
-#include <iomanip>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <numeric>
 #include <utility>
@@ -42,18 +41,12 @@ struct guardedvector {
 
 typedef struct {
 	string UMI_seq;
+	string padded_umi;  // pre-computed "NNN"+UMI_seq+"NNN", cached to avoid realloc in hot loops
 	int founder_offset=0;
 	string founder_temp;
 	int founder_temp_dist;
 	bool founder_temp_found=false;
 }UMI_item;
-
-inline vector<int> repeat_n (int n){
-        vector <int> repeats;
-        for (int i=0; i<n; i++)
-                repeats.push_back(n);
-        return repeats;
-}
 
 template <typename T>
 T median(const vector<T> v){
@@ -78,15 +71,14 @@ vector<int> findItems(T const &v, int target) {
         return indices;
 }
 
-// Function to convert a std::map<K,V> to std::multimap<V,K>
-template<typename K, typename V>
-        std::multimap<V,K,std::greater<int>> invertMap(std::map<K,V> const &map)
-        {
-        std::multimap<V,K,std::greater<int>> multimap;
-
-        for (auto const &pair: map) {
-                 multimap.insert(std::make_pair(pair.second, pair.first));
-        }
+// Convert any map-like container to std::multimap<V,K> sorted descending by value
+template<typename Map>
+std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<int>>
+invertMap(Map const &map)
+{
+        std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<int>> multimap;
+        for (auto const &pair: map)
+                multimap.insert(std::make_pair(pair.second, pair.first));
         return multimap;
 }
 
@@ -94,7 +86,7 @@ double mean(const vector<int> v);
 
 double var(const vector<int> v);
 
-void shared_writer(ofstream& out, const vector<string> lines);
+void shared_writer(ofstream& out, const vector<string>& lines);
 
 int count_umi(const string filename);
 
@@ -108,11 +100,11 @@ void fit_nb_model( const string  filename, float  p, int & min_read_founder, int
 
 void fit_knee_plot ( const string  filename, int & min_read_founder, int & kp_estimated_molecule, int & kp_angle, int & median_rpu, int & after_rpucut_molecule );
 
-bool align_umi( string umi, string f,  int max_dist, int & endpos, int & dist);
+bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist);
 
 bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const string primer_id, const unsigned max_dist, const unsigned max_umi_len);
 
-vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, map<int, vector<UMI_item>>  t_umi);
+vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size);
 
 vector <int> split_umi_to_threads_on_founder(vector<UMI_item> umi_pool, int threads, int pool_size);
 
@@ -120,7 +112,7 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 
 void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool );
 
-void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, string curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  );
+void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, const string& curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  );
 
 void clustering_umis(const string in_filename, const string out_filename,  UMI_clustering_parameters parameters );
 
