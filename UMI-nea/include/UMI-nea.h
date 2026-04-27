@@ -6,6 +6,7 @@
 #include <future>
 #include <thread>
 #include <mutex>
+#include <shared_mutex>
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -34,7 +35,7 @@ typedef struct {
 }UMI_clustering_parameters;
 
 struct guardedvector {
-   mutex guard;
+   shared_mutex guard;
    vector<string> myvector;
    int size_last_cycle=0;
 };

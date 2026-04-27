@@ -3,9 +3,9 @@
 //global variable
 mutex mut;
 atomic_int founder_added{0};
-// Removed global span; poll loop in parallel_processing now uses non-blocking wait_for(0) + 10µs sleep.
+// Consumer poll loop uses founder_added atomic + 10µs sleep instead of condition_variable.
 guardedvector founders;
-bool producer_done=false;
+atomic<bool> producer_done{false};
 const int N_num=3;
 const string padding(N_num, 'N');
 bool verbose=false;
@@ -285,7 +285,7 @@ bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, in
 
 bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const string primer_id, const unsigned max_dist, const unsigned max_umi_len)
 {
-      producer_done=false;
+      producer_done.store(false);
       int write_every=ceil(umi_pool_subset.size()/10)>10?ceil(umi_pool_subset.size()/10):10;
 
       int founder_clustered=0;
@@ -371,10 +371,10 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 	    shared_writer(out, lines);
       }
 
-      producer_done=true;
       founders.guard.lock();
       founders.size_last_cycle=founders.myvector.size();
       founders.guard.unlock();
+      producer_done.store(true);
       return true;
 }
 
@@ -391,49 +391,29 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
       vector <string> lines;
       vector<UMI_item> updated_subset;
       int founders_start_offset=0;
-      int step_size_small=2;
-      int step_size_big;
-      if (first_founder_mode)
-	    step_size_big=0;
-      else
-	    step_size_big=t_umi_size/10;
-      int step_size;
-      int last_cycle_founders_size = founders.size_last_cycle;
       while (true) {
-	    if (producer_done) {
-		  if (lines.size()>0)
-			shared_writer(out, lines);
+	    // Poll for new founders using the atomic counter; avoids condition_variable
+	    // per-founder notify_all overhead (which causes N thread wake-ups per founder).
+	    while ((int)founder_added.load() <= founders_start_offset && !producer_done.load())
+		  this_thread::sleep_for(chrono::microseconds(10));
+	    int curr_founders_size;
+	    vector<string> founder_view;
+	    {
+		  shared_lock<shared_mutex> lk(founders.guard);
+		  curr_founders_size = (int)founders.myvector.size();
+		  if (curr_founders_size > founders_start_offset)
+			founder_view.assign(founders.myvector.begin() + founders_start_offset,
+					   founders.myvector.end());
+	    }
+
+	    if (curr_founders_size <= founders_start_offset) {
+		  // producer_done and no new founders — nothing left to do
+		  if (lines.size()>0) shared_writer(out, lines);
 		  return umi_pool_subset;
 	    }
-	    int curr_founders_size;
-	    vector <string> founder_view;
-	    founders.guard.lock();
-	    curr_founders_size = founders.myvector.size();
-	    if (curr_founders_size>founders_start_offset)
-		  founder_view.assign(founders.myvector.begin()+founders_start_offset ,founders.myvector.end()  );
-	    founders.guard.unlock();
 
-	    if (founders_start_offset==0 ){
-		  if (curr_founders_size == 0 && last_cycle_founders_size==0)
-			continue;
-		  else if (curr_founders_size != 0 && last_cycle_founders_size==0){
-			step_size=step_size_big;
-			if (curr_founders_size  < step_size ){
-			      continue;
-			}
-		  }
-		  else
-			step_size=last_cycle_founders_size;
-	    }
-	    else{
-		  if (last_cycle_founders_size==0)
-			step_size=step_size_big;
-		  else
-			step_size=step_size_small;
-		  if (curr_founders_size - founders_start_offset < step_size ){
-			continue;
-		  }
-	    }
+	    int step_size = (int)founder_view.size(); // process all newly available founders
+
 	    // Build padded founder string once per cycle; all UMIs with byte_start==0 share it.
 	    string full_founder_string;
 	    full_founder_string.reserve((size_t)step_size * (max_umi_len + N_num));
@@ -447,14 +427,18 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 	    padded_full = padding;
 	    padded_full += full_founder_string;
 	    string padded_f_scratch;  // reused buffer for UMIs with non-zero byte_start
-	    for (int j = 0; j < umi_pool_subset.size(); ++j) {
+	    for (int j = 0; j < (int)umi_pool_subset.size(); ++j) {
 		  const UMI_item& one_umi_ref = umi_pool_subset[j];
 		  const string& umi = one_umi_ref.UMI_seq;
 		  int offset = one_umi_ref.founder_offset;
 		  int relative_start = offset - founders_start_offset;
+		  if (relative_start >= step_size) {
+			// UMI has already compared against all founders in this view; carry over unchanged.
+			updated_subset.push_back(one_umi_ref);
+			continue;
+		  }
+		  if (relative_start < 0) relative_start = 0;
 		  size_t byte_start = (size_t)relative_start * (max_umi_len + N_num);
-		  // Common case: all UMIs in the first cycle have byte_start==0 and share padded_full.
-		  // Minority case: reuse padded_f_scratch to avoid repeated malloc/free per UMI.
 		  const string* target_ptr;
 		  if (byte_start == 0) {
 			target_ptr = &padded_full;
@@ -472,7 +456,6 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 			const string& clustered_founder=founder_view[ind];
 
 			if (dist<=stop_search_dist){
-			      //founder being found in consumer pool as the distance to founder <= 1 or if first founder mode is on and dist is <= cutoff
 			      string line;
 			      line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
 			      line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
@@ -489,22 +472,16 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 				    one_umi.founder_temp=clustered_founder;
 				    one_umi.founder_temp_dist=dist;
 			      }
-			      if (step_size!=last_cycle_founders_size)
-				    one_umi.founder_offset += step_size;
-			      else
-				    one_umi.founder_offset = last_cycle_founders_size;
+			      one_umi.founder_offset = founders_start_offset + step_size;
 			      updated_subset.push_back(std::move(one_umi));
 			}
 		  }
 		  else{
 			UMI_item one_umi = one_umi_ref;
-			if (step_size!=last_cycle_founders_size)
-			      one_umi.founder_offset += step_size;
-			else
-			      one_umi.founder_offset = last_cycle_founders_size;
+			one_umi.founder_offset = founders_start_offset + step_size;
 			updated_subset.push_back(std::move(one_umi));
 		  }
-		  if  (!first_founder_mode && producer_done ){ //when -d is not set and producer is done, we can exit loop now and will not affect resluts reproduciblity
+		  if  (!first_founder_mode && producer_done.load() ){
 			updated_subset.insert(updated_subset.end(), umi_pool_subset.begin()+j+1, umi_pool_subset.end());
 			umi_pool_subset = updated_subset;
 			if (lines.size()>0)
@@ -518,7 +495,7 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 		  shared_writer(out, lines);
 		  lines.clear();
 	    }
-	    if (first_founder_mode  )
+	    if (first_founder_mode)
 		  return umi_pool_subset;
 	    founders_start_offset += step_size;
       }
@@ -583,7 +560,7 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 
       vector<int> thread_founder_ends=split_umi_to_threads_on_founder(umi_pool, parameters.thread, pool_size);
 
-      producer_done=false;
+      producer_done.store(false);
       vector<UMI_item> updated_umi_pool;
       map<int, vector<UMI_item>> t_umis;
       map<int, vector<UMI_item>> consumer_results;
@@ -605,32 +582,21 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 	    t_umis[i]=one_d_umis;
       }
 
+      // Track which t_umis index each cl_consumers entry corresponds to so results
+      // can be stored back under the correct key regardless of empty-slot skips.
+      vector<int> consumer_thread_ids;
       for (int i = 1; i < num_worker_threads; i++) {
-	    if (t_umis[i].size()>0)
+	    if (t_umis[i].size()>0) {
+		  consumer_thread_ids.push_back(i);
 		  // Capture only this thread's vector (not the whole map) to avoid N full-map copies.
 		  cl_consumers.push_back(async(launch::async, [i,&out,first_founder_mode, curr_primer_id,max_dist,max_umi_len, v=t_umis[i], t_umi_size]{return consumer(i, out, first_founder_mode, curr_primer_id, max_dist, max_umi_len, std::move(v), t_umi_size); } ) ) ;
-
+	    }
       }
-      vector<bool> thread_done_bits(cl_consumers.size()+1, false);
-      auto thread_done = count(thread_done_bits.begin(), thread_done_bits.end(), true);
-      while(thread_done<cl_consumers.size()+1) {
-	    if (producer_done){
-		  thread_done_bits[0]=true;
-	    }
-	    for (int i = 1; i <= (int)cl_consumers.size(); i++) {
-		  if ( thread_done_bits[i] ||  t_umis[i].size()==0){
-			thread_done_bits[i]=true;
-			continue;
-		  }
-		  // Non-blocking check; avoids blocking 1ms × N_threads per poll iteration.
-		  else if (cl_consumers[i-1].wait_for(chrono::seconds(0)) == future_status::ready && cl_consumers[i-1].valid()) {
-			thread_done_bits[i]=true;
-			consumer_results[i]=cl_consumers[i-1].get();
-		  }
-	    }
-	    thread_done = count(thread_done_bits.begin(), thread_done_bits.end(), true);
-	    if (thread_done < (int)cl_consumers.size()+1)
-		  this_thread::sleep_for(chrono::microseconds(10));
+      // Wait for producer first; it sets producer_done and notifies consumers via cv.
+      // Consumers unblock, finish their remaining UMIs, then return.
+      fp_producer.get();
+      for (int j = 0; j < (int)cl_consumers.size(); j++) {
+	    consumer_results[consumer_thread_ids[j]] = cl_consumers[j].get();
       }
       for (int i = 1; i <= (int)t_umis.size(); i++) {
 	    updated_umi_pool.insert(updated_umi_pool.end(), consumer_results[i].begin(), consumer_results[i].end());
