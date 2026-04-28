@@ -1,5 +1,22 @@
 #include "UMI-nea.h"
 
+// Encode a 6-mer as a 12-bit int (2 bits/base). Returns -1 on N or unknown base.
+static inline int encode_kmer(const char* s) {
+    int code = 0;
+    for (int i = 0; i < 6; ++i) {
+        int b;
+        switch (s[i]) {
+            case 'A': case 'a': b = 0; break;
+            case 'C': case 'c': b = 1; break;
+            case 'G': case 'g': b = 2; break;
+            case 'T': case 't': b = 3; break;
+            default: return -1;
+        }
+        code = (code << 2) | b;
+    }
+    return code;
+}
+
 //global variable
 mutex mut;
 atomic_int founder_added{0};
@@ -290,20 +307,21 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 
       int founder_clustered=0;
       vector <string> lines;
-      // Incrementally extend cached padded founder string (starting from founder 0) to avoid
-      // O(N*F) stringstream rebuild. For UMIs with non-zero founder_offset, a substring of
-      // padded_cached starting at that offset is used so the index calculation stays correct.
       string padded_cached = padding;
       int cached_count = 0;
-      string target_scratch;  // reused buffer for UMIs with founder_offset > 0
+      const int K = 6;
+      const int slot = (int)(max_umi_len + N_num);
+      // Local k-mer index mirrors padded_cached: built as founders are appended.
+      unordered_map<int, vector<int>> prod_kmer_idx;
+      vector<int> prod_cands;
+      prod_cands.reserve(32);
+
       for (auto const & u: umi_pool_subset){
 	    int offset = u.founder_offset;
 	    const string& umi = u.UMI_seq;
-	    //new founder being found:
 	    string line;
 	    line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
 	    line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
-	    bool clustered = false;
 	    if (founder_added>0){
 		  int curr_size = founders.myvector.size();
 		  if (curr_size > cached_count) {
@@ -311,37 +329,51 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 			      const string& f = founders.myvector[i];
 			      padded_cached.append(f);
 			      padded_cached.append(max_umi_len + N_num - f.size(), 'N');
+			      for (int p = 0; p + K <= (int)f.size(); ++p) {
+				    int km = encode_kmer(f.data() + p);
+				    if (km >= 0) prod_kmer_idx[km].push_back(i);
+			      }
 			}
 			cached_count = curr_size;
 		  }
-		  // Build target starting from founder[offset]: "NNN" + padded_cached[N_num + offset*(slot)]
-		  // This keeps the index formula (endpos-N_num)/(slot)+offset correct.
-		  const string* target_ptr;
-		  if (offset == 0) {
-			target_ptr = &padded_cached;
-		  } else {
-			size_t byte_start = N_num + (size_t)offset * (max_umi_len + N_num);
-			target_scratch.clear();
-			if (byte_start < padded_cached.size()) {
-			      target_scratch.reserve(N_num + padded_cached.size() - byte_start);
-			      target_scratch = padding;
-			      target_scratch.append(padded_cached, byte_start, string::npos);
+		  // K-mer pre-filter: find candidates in [offset, cached_count)
+		  prod_cands.clear();
+		  for (int p = 0; p + K <= (int)umi.size(); ++p) {
+			int km = encode_kmer(umi.data() + p);
+			if (km < 0) continue;
+			auto it = prod_kmer_idx.find(km);
+			if (it != prod_kmer_idx.end()) {
+			      for (int idx : it->second)
+				    if (idx >= offset) prod_cands.push_back(idx);
 			}
-			target_ptr = &target_scratch;
 		  }
-		  int endpos;
-		  int dist;
-		  if (!target_ptr->empty() && align_umi(u.padded_umi, *target_ptr, max_dist, endpos, dist )) {
+		  sort(prod_cands.begin(), prod_cands.end());
+		  prod_cands.erase(unique(prod_cands.begin(), prod_cands.end()), prod_cands.end());
+
+		  int endpos, dist;
+		  bool matched = false;
+		  int matched_ind = -1;
+		  if (!prod_cands.empty()) {
+			string small_target = padding;
+			small_target.reserve(N_num + prod_cands.size() * slot);
+			for (int idx : prod_cands) {
+			      size_t start = N_num + (size_t)idx * slot;
+			      small_target.append(padded_cached, start, slot);
+			}
+			if (align_umi(u.padded_umi, small_target, max_dist, endpos, dist)) {
+			      matched = true;
+			      matched_ind = prod_cands[(endpos - N_num) / slot];
+			}
+		  }
+		  if (matched) {
 			founder_clustered++;
-			int ind=(endpos-N_num)/(max_umi_len+N_num)+offset;
-			const string& clustered_founder=founders.myvector[ind];
+			const string& clustered_founder = founders.myvector[matched_ind];
 			const string& chosen = (u.founder_temp_found && dist >= u.founder_temp_dist) ? u.founder_temp : clustered_founder;
 			line.clear();
 			line.reserve(primer_id.size() + 2 + umi.size() + 2 + chosen.size() + 1);
 			line = primer_id; line += '\t'; line += umi; line += '\t'; line += chosen; line += '\n';
 		  }
 		  else if (u.founder_temp_found ){
-			//After checking all UMI in the front line, only option is to choose  temp founder
 			line.clear();
 			line.reserve(primer_id.size() + 2 + umi.size() + 2 + u.founder_temp.size() + 1);
 			line = primer_id; line += '\t'; line += umi; line += '\t'; line += u.founder_temp; line += '\n';
@@ -359,7 +391,6 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 		  founders.guard.unlock();
 		  founder_added=1;
 	    }
-	    //shared_writer(out, line);
 	    lines.push_back(line);
 	    if (lines.size()>=write_every){
 		  shared_writer(out, lines);
@@ -380,7 +411,8 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 
 vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size)
 {
-
+      const int K = 6;
+      const int slot = (int)(max_umi_len + N_num);
       int stop_search_dist=1;
       if (first_founder_mode)
 	    stop_search_dist=max_dist;
@@ -391,13 +423,24 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
       vector <string> lines;
       vector<UMI_item> updated_subset;
       int founders_start_offset=0;
+
+      // Hoist per-cycle allocations outside the loop so memory is reused across cycles.
+      // kmer_tbl: fixed 4096-slot direct array (12-bit encoded k-mer → founder indices).
+      // Only touched slots are cleared via kmer_used, avoiding full array reset each cycle.
+      array<vector<int>, 4096> kmer_tbl;
+      vector<int> kmer_used;
+      kmer_used.reserve(512);
+      vector<bool> in_cand;    // dedup bitset; grown as needed, reset per UMI
+      vector<int> candidates;
+      candidates.reserve(32);
+      string small_target;
+      small_target.reserve(32 * slot);
+      vector<string> founder_view;
+
       while (true) {
-	    // Poll for new founders using the atomic counter; avoids condition_variable
-	    // per-founder notify_all overhead (which causes N thread wake-ups per founder).
 	    while ((int)founder_added.load() <= founders_start_offset && !producer_done.load())
 		  this_thread::sleep_for(chrono::microseconds(10));
 	    int curr_founders_size;
-	    vector<string> founder_view;
 	    {
 		  shared_lock<shared_mutex> lk(founders.guard);
 		  curr_founders_size = (int)founders.myvector.size();
@@ -407,54 +450,72 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 	    }
 
 	    if (curr_founders_size <= founders_start_offset) {
-		  // producer_done and no new founders — nothing left to do
 		  if (lines.size()>0) shared_writer(out, lines);
 		  return umi_pool_subset;
 	    }
 
-	    int step_size = (int)founder_view.size(); // process all newly available founders
+	    int step_size = (int)founder_view.size();
 
-	    // Build padded founder string once per cycle; all UMIs with byte_start==0 share it.
-	    string full_founder_string;
-	    full_founder_string.reserve((size_t)step_size * (max_umi_len + N_num));
+	    // Build k-mer index over founder_view for fast candidate lookup.
+	    // Pigeonhole: any two 18-mers with Levenshtein dist ≤ 2 share ≥1 6-mer.
+	    kmer_used.clear();
 	    for (int i = 0; i < step_size; ++i) {
-		  const string& fi = founder_view[i];
-		  full_founder_string.append(fi);
-		  full_founder_string.append(max_umi_len + N_num - fi.size(), 'N');
+		  const string& f = founder_view[i];
+		  for (int p = 0; p + K <= (int)f.size(); ++p) {
+			int km = encode_kmer(f.data() + p);
+			if (km < 0) continue;
+			if (kmer_tbl[km].empty()) kmer_used.push_back(km);
+			kmer_tbl[km].push_back(i);
+		  }
 	    }
-	    string padded_full;
-	    padded_full.reserve(N_num + full_founder_string.size());
-	    padded_full = padding;
-	    padded_full += full_founder_string;
-	    string padded_f_scratch;  // reused buffer for UMIs with non-zero byte_start
+	    // Grow in_cand if this cycle has more founders than any previous cycle.
+	    if ((int)in_cand.size() < step_size) in_cand.resize(step_size, false);
+
 	    for (int j = 0; j < (int)umi_pool_subset.size(); ++j) {
 		  const UMI_item& one_umi_ref = umi_pool_subset[j];
 		  const string& umi = one_umi_ref.UMI_seq;
 		  int offset = one_umi_ref.founder_offset;
 		  int relative_start = offset - founders_start_offset;
 		  if (relative_start >= step_size) {
-			// UMI has already compared against all founders in this view; carry over unchanged.
 			updated_subset.push_back(one_umi_ref);
 			continue;
 		  }
 		  if (relative_start < 0) relative_start = 0;
-		  size_t byte_start = (size_t)relative_start * (max_umi_len + N_num);
-		  const string* target_ptr;
-		  if (byte_start == 0) {
-			target_ptr = &padded_full;
-		  } else {
-			padded_f_scratch.clear();
-			padded_f_scratch.reserve(N_num + full_founder_string.size() - byte_start);
-			padded_f_scratch = padding;
-			padded_f_scratch.append(full_founder_string, byte_start, string::npos);
-			target_ptr = &padded_f_scratch;
-		  }
-		  int endpos;
-		  int dist;
-		  if (align_umi(one_umi_ref.padded_umi, *target_ptr, max_dist, endpos, dist)) {
-			int ind=(endpos-N_num)/(max_umi_len+N_num) + relative_start;
-			const string& clustered_founder=founder_view[ind];
 
+		  // K-mer pre-filter: collect candidates in [relative_start, step_size)
+		  candidates.clear();
+		  for (int p = 0; p + K <= (int)umi.size(); ++p) {
+			int km = encode_kmer(umi.data() + p);
+			if (km < 0) continue;
+			for (int idx : kmer_tbl[km]) {
+			      if (idx >= relative_start && !in_cand[idx]) {
+				    in_cand[idx] = true;
+				    candidates.push_back(idx);
+			      }
+			}
+		  }
+		  for (int idx : candidates) in_cand[idx] = false; // reset for next UMI
+		  sort(candidates.begin(), candidates.end());
+
+		  int endpos, dist;
+		  bool matched = false;
+		  int matched_ind = -1;
+		  if (!candidates.empty()) {
+			small_target.clear();
+			small_target = padding;
+			for (int idx : candidates) {
+			      const string& fi = founder_view[idx];
+			      small_target.append(fi);
+			      small_target.append(max_umi_len + N_num - fi.size(), 'N');
+			}
+			if (align_umi(one_umi_ref.padded_umi, small_target, max_dist, endpos, dist)) {
+			      matched = true;
+			      matched_ind = candidates[(endpos - N_num) / slot];
+			}
+		  }
+
+		  if (matched) {
+			const string& clustered_founder = founder_view[matched_ind];
 			if (dist<=stop_search_dist){
 			      string line;
 			      line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
@@ -498,6 +559,8 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 	    if (first_founder_mode)
 		  return umi_pool_subset;
 	    founders_start_offset += step_size;
+	    // Clear only the k-mer table slots we touched this cycle.
+	    for (int km : kmer_used) kmer_tbl[km].clear();
       }
 }
 
@@ -605,32 +668,69 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 }
 
 void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool ){
+      const int K = 6;
+      const int slot = (int)(max_umi_len + N_num);
       int write_every=100;
       vector <string> lines;
 
       vector <string> founder_view={founders.myvector.begin(), founders.myvector.end()};
-      // Build founder string once — founders don't change during this function.
-      string padded_founder = padding;
-      padded_founder.reserve(N_num + founder_view.size() * (max_umi_len + N_num));
-      for (const string& f : founder_view) {
-	    padded_founder.append(f);
-	    padded_founder.append(max_umi_len + N_num - f.size(), 'N');
+      int n_founders = (int)founder_view.size();
+
+      // Build k-mer index over all founders (founders are fixed during this function).
+      unordered_map<int, vector<int>> kmer_idx;
+      kmer_idx.reserve(n_founders * ((int)max_umi_len - K + 1));
+      for (int i = 0; i < n_founders; ++i) {
+	    const string& f = founder_view[i];
+	    for (int p = 0; p + K <= (int)f.size(); ++p) {
+		  int km = encode_kmer(f.data() + p);
+		  if (km >= 0) kmer_idx[km].push_back(i);
+	    }
       }
-      for (int j = 0; j < umi_pool.size(); ++j) {
+      vector<bool> in_cand(n_founders, false);
+      vector<int> candidates;
+      candidates.reserve(32);
+
+      for (int j = 0; j < (int)umi_pool.size(); ++j) {
 	    const UMI_item& one_umi = umi_pool[j];
 	    const string& umi = one_umi.UMI_seq;
-	    int endpos;
-	    int dist;
-	    string line;
-	    if (align_umi(one_umi.padded_umi, padded_founder, max_dist, endpos, dist)) {
-		  int ind=(endpos-N_num)/(max_umi_len+N_num)  ;
-		  const string& clustered_founder=founder_view[ind];
-		  //founder being found for UMIs not qualified for founder for other UMIs
-		  line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
-		  line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
+
+	    candidates.clear();
+	    for (int p = 0; p + K <= (int)umi.size(); ++p) {
+		  int km = encode_kmer(umi.data() + p);
+		  if (km < 0) continue;
+		  auto it = kmer_idx.find(km);
+		  if (it != kmer_idx.end()) {
+			for (int idx : it->second) {
+			      if (!in_cand[idx]) {
+				    in_cand[idx] = true;
+				    candidates.push_back(idx);
+			      }
+			}
+		  }
 	    }
-	    else{
-		  //no exising founder being found, this UMI is the founder for itself
+	    for (int idx : candidates) in_cand[idx] = false;
+	    sort(candidates.begin(), candidates.end());
+
+	    string line;
+	    if (!candidates.empty()) {
+		  string small_target = padding;
+		  small_target.reserve(N_num + candidates.size() * slot);
+		  for (int idx : candidates) {
+			const string& fi = founder_view[idx];
+			small_target.append(fi);
+			small_target.append(max_umi_len + N_num - fi.size(), 'N');
+		  }
+		  int endpos, dist;
+		  if (align_umi(one_umi.padded_umi, small_target, max_dist, endpos, dist)) {
+			int ind = candidates[(endpos - N_num) / slot];
+			const string& clustered_founder = founder_view[ind];
+			line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
+			line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
+		  } else {
+			line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
+			line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
+		  }
+	    } else {
 		  line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
 		  line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
 	    }
@@ -704,7 +804,8 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    one_umi.founder_offset = 0;
 	    if (read_count < min_read_founder ){ //reach the line where the read count for umi less than the minimal requirement of founder
 		  while (!umi_pool.empty()) { //finish current umi_pool processing first
-			parallel_processing( umi_pool,  out_file, parameters );
+			UMI_clustering_parameters dp = parameters; dp.pool_size = (int)umi_pool.size();
+			parallel_processing( umi_pool,  out_file, dp );
 		  }
 		  if (primer_id != curr_primer_id )   { //A new primer and this primer the first UMI < min_read_founder
 			if (!low_reads_umi_pool.empty())
@@ -721,7 +822,8 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 		  if ( verbose)
 			cout<<"A new group or primer:"<<primer_id<<" umi:"<<umi<<"\n";
 		  while (!umi_pool.empty()) {
-                        parallel_processing( umi_pool,  out_file, parameters );
+			UMI_clustering_parameters dp = parameters; dp.pool_size = (int)umi_pool.size();
+                        parallel_processing( umi_pool,  out_file, dp );
                   }
 		  if (!low_reads_umi_pool.empty()){
 			parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
@@ -741,8 +843,8 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       }
       //read last line of input file
       while (!umi_pool.empty()) {
-	    int process_umi=umi_pool.size();
-	    parallel_processing(umi_pool,  out_file, parameters);
+	    UMI_clustering_parameters dp = parameters; dp.pool_size = (int)umi_pool.size();
+	    parallel_processing(umi_pool,  out_file, dp);
       }
       if (!low_reads_umi_pool.empty()){
 	    parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
