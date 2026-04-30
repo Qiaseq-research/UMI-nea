@@ -111,7 +111,7 @@ vector <int> split_umi_to_threads_on_founder(vector<UMI_item> umi_pool, int thre
 
 void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_clustering_parameters parameters);
 
-void founder_find ( vector<UMI_item>& umi_pool, ofstream& out,  string primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool );
+string founder_find ( const vector<UMI_item>& umi_pool, int begin, int end, const string primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool, const array<vector<int>, 4096>& shared_kmer_idx, const vector<string>& shared_founder_view, const string& shared_padded_founders );
 
 void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, const string& curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  );
 
