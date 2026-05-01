@@ -87,8 +87,6 @@ double mean(const vector<int> v);
 
 double var(const vector<int> v);
 
-void shared_writer(ofstream& out, const vector<string>& lines);
-
 int count_umi(const string filename);
 
 int calculate_dist_upper_bound(float error_rate, int max_umi_len);
@@ -103,9 +101,9 @@ void fit_knee_plot ( const string  filename, int & min_read_founder, int & kp_es
 
 bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist);
 
-bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const string primer_id, const unsigned max_dist, const unsigned max_umi_len);
+string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id, const unsigned max_dist, const unsigned max_umi_len);
 
-vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size);
+pair<string, vector<UMI_item>> consumer(const int worker_index, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size);
 
 vector <int> split_umi_to_threads_on_founder(vector<UMI_item> umi_pool, int threads, int pool_size);
 

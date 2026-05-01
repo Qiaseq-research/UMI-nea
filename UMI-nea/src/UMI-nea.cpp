@@ -18,7 +18,6 @@ static inline int encode_kmer(const char* s) {
 }
 
 //global variable
-mutex mut;
 atomic_int founder_added{0};
 // Consumer poll loop uses founder_added atomic + 10µs sleep instead of condition_variable.
 guardedvector founders;
@@ -275,13 +274,6 @@ void fit_nb_model( const string  filename, float  p,  int & min_read_founder, in
       nb_estimated_molecule=umi_filtered_data.size();
 }
 
-void shared_writer(ofstream& out, const vector<string>& lines)
-{
-      lock_guard<mutex> lock(mut);
-      for (const string& line : lines)
-	    out << line;
-}
-
 bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist){
       EdlibAlignMode mode = EDLIB_MODE_HW;
       EdlibAlignTask task = EDLIB_TASK_DISTANCE;
@@ -300,13 +292,13 @@ bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, in
       return false;
 }
 
-bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const string primer_id, const unsigned max_dist, const unsigned max_umi_len)
+string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id, const unsigned max_dist, const unsigned max_umi_len)
 {
       producer_done.store(false);
-      int write_every=ceil(umi_pool_subset.size()/10)>10?ceil(umi_pool_subset.size()/10):10;
 
       int founder_clustered=0;
-      vector <string> lines;
+      string buf;
+      buf.reserve(umi_pool_subset.size() * 50);
       string padded_cached = padding;
       int cached_count = 0;
       const int K = 6;
@@ -395,25 +387,17 @@ bool producer(const vector<UMI_item> &umi_pool_subset, ofstream& out, const stri
 		  founders.guard.unlock();
 		  founder_added=1;
 	    }
-	    lines.push_back(line);
-	    if (lines.size()>=write_every){
-		  shared_writer(out, lines);
-		  lines.clear();
-	    }
-
-      }
-      if (lines.size()>=0){
-	    shared_writer(out, lines);
+	    buf += line;
       }
 
       founders.guard.lock();
       founders.size_last_cycle=founders.myvector.size();
       founders.guard.unlock();
       producer_done.store(true);
-      return true;
+      return buf;
 }
 
-vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size)
+pair<string, vector<UMI_item>> consumer(const int worker_index, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size)
 {
       const int K = 6;
       const int slot = (int)(max_umi_len + N_num);
@@ -421,10 +405,10 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
       if (first_founder_mode)
 	    stop_search_dist=max_dist;
       if (umi_pool_subset.size()==0){
-	    return umi_pool_subset;
+	    return {"", umi_pool_subset};
       }
-      int write_every=10;
-      vector <string> lines;
+      string buf;
+      buf.reserve(umi_pool_subset.size() * 50);
       vector<UMI_item> updated_subset;
       int founders_start_offset=0;
 
@@ -455,8 +439,7 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 	    }
 
 	    if (curr_founders_size <= founders_start_offset) {
-		  if (lines.size()>0) shared_writer(out, lines);
-		  return umi_pool_subset;
+		  return {buf, umi_pool_subset};
 	    }
 
 	    int step_size = (int)founder_view.size();
@@ -523,14 +506,7 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 		  if (matched) {
 			const string& clustered_founder = founder_view[matched_ind];
 			if (dist<=stop_search_dist){
-			      string line;
-			      line.reserve(primer_id.size() + 2 + umi.size() + 2 + clustered_founder.size() + 1);
-			      line = primer_id; line += '\t'; line += umi; line += '\t'; line += clustered_founder; line += '\n';
-			      lines.push_back(std::move(line));
-			      if (lines.size()>=write_every){
-				    shared_writer(out, lines);
-				    lines.clear();
-			      }
+			      buf += primer_id; buf += '\t'; buf += umi; buf += '\t'; buf += clustered_founder; buf += '\n';
 			}
 			else {
 			      UMI_item one_umi = one_umi_ref;
@@ -551,19 +527,13 @@ vector<UMI_item> consumer(const int worker_index, ofstream& out, bool first_foun
 		  if  (!first_founder_mode && producer_done.load() ){
 			updated_subset.insert(updated_subset.end(), umi_pool_subset.begin()+j+1, umi_pool_subset.end());
 			umi_pool_subset = updated_subset;
-			if (lines.size()>0)
-			      shared_writer(out, lines);
-			return umi_pool_subset;
+			return {buf, umi_pool_subset};
 		  }
 	    }
 	    umi_pool_subset = updated_subset;
 	    updated_subset.clear();
-	    if (lines.size()>0){
-		  shared_writer(out, lines);
-		  lines.clear();
-	    }
 	    if (first_founder_mode)
-		  return umi_pool_subset;
+		  return {buf, umi_pool_subset};
 	    founders_start_offset += step_size;
 	    // Clear only the k-mer table slots we touched this cycle.
 	    for (int km : kmer_used) kmer_tbl[km].clear();
@@ -633,11 +603,13 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
       vector<UMI_item> updated_umi_pool;
       map<int, vector<UMI_item>> t_umis;
       map<int, vector<UMI_item>> consumer_results;
-      vector<future<vector<UMI_item>>> cl_consumers;
+      vector<future<pair<string, vector<UMI_item>>>> cl_consumers;
       const int t_umi_size = num_worker_threads - 1;
 
       vector<UMI_item> umi_pool_subset(umi_pool.begin(), umi_pool.begin()+min(static_cast<unsigned long>(thread_founder_ends[0]) , umi_pool.size()));
-      shared_future<bool>  fp_producer = async(launch::async, [umi_pool_subset, &out, curr_primer_id,max_dist, max_umi_len]{return producer( cref(umi_pool_subset), out, curr_primer_id, max_dist, max_umi_len);});
+      future<string> fp_producer = async(launch::async, [umi_pool_subset, curr_primer_id, max_dist, max_umi_len]{
+	    return producer(cref(umi_pool_subset), curr_primer_id, max_dist, max_umi_len);
+      });
       for (int i = 1; i < num_worker_threads; i++) {
 	    int first = min(static_cast<unsigned long>(thread_founder_ends[i-1]) , umi_pool.size());
 	    int last = min(static_cast<unsigned long>(thread_founder_ends[i]) , umi_pool.size());
@@ -658,14 +630,19 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 	    if (t_umis[i].size()>0) {
 		  consumer_thread_ids.push_back(i);
 		  // Capture only this thread's vector (not the whole map) to avoid N full-map copies.
-		  cl_consumers.push_back(async(launch::async, [i,&out,first_founder_mode, curr_primer_id,max_dist,max_umi_len, v=t_umis[i], t_umi_size]{return consumer(i, out, first_founder_mode, curr_primer_id, max_dist, max_umi_len, std::move(v), t_umi_size); } ) ) ;
+		  cl_consumers.push_back(async(launch::async, [i, first_founder_mode, curr_primer_id, max_dist, max_umi_len, v=t_umis[i], t_umi_size]{
+			return consumer(i, first_founder_mode, curr_primer_id, max_dist, max_umi_len, std::move(v), t_umi_size);
+		  }));
 	    }
       }
-      // Wait for producer first; it sets producer_done and notifies consumers via cv.
-      // Consumers unblock, finish their remaining UMIs, then return.
-      fp_producer.get();
+      // Wait for producer; it sets producer_done which unblocks consumers.
+      // Write all output sequentially after join — no mutex needed.
+      string producer_buf = fp_producer.get();
+      if (!producer_buf.empty()) out << producer_buf;
       for (int j = 0; j < (int)cl_consumers.size(); j++) {
-	    consumer_results[consumer_thread_ids[j]] = cl_consumers[j].get();
+	    auto result = cl_consumers[j].get();
+	    if (!result.first.empty()) out << result.first;
+	    consumer_results[consumer_thread_ids[j]] = std::move(result.second);
       }
       for (int i = 1; i <= (int)t_umis.size(); i++) {
 	    updated_umi_pool.insert(updated_umi_pool.end(), consumer_results[i].begin(), consumer_results[i].end());
@@ -821,8 +798,7 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 		  if ( verbose)
 			cout<<"A new group or primer:"<<primer_id<<" umi:"<<umi<<"\n";
 		  while (!umi_pool.empty()) {
-			UMI_clustering_parameters dp = parameters; dp.pool_size = (int)umi_pool.size();
-                        parallel_processing( umi_pool,  out_file, dp );
+			parallel_processing( umi_pool,  out_file, parameters );
                   }
 		  if (!low_reads_umi_pool.empty()){
 			parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
