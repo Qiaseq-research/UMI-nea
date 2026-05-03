@@ -19,10 +19,13 @@ string estimate_out_file;
 int max_dist=1;
 bool set_dist=false;
 int num_thread=10;
-int pool_size=1000;
+int pool_size=0;  // 0 = auto-scale: max(48000, thread*2000)
 int min_read_founder_user=1;
 int min_read_founder=1;
 bool user_set_min_read_founder=false;
+int prod_size=0;   // 0 = auto: max(50, pool_size/(thread*4))
+bool user_set_pool_size=false;
+bool user_set_prod_size=false;
 bool nb_estimate=false;
 bool kp_estimate=false;
 bool auto_estimate=true;
@@ -39,6 +42,7 @@ float error_rate=0.001;
 bool set_error=false;
 bool greedy_mode=false; //quick search mode, once founder found, immediately stop search,  no need to find the low distance founder, good enough for low sequencing error generated UMIs because -m will be small
 float nb_lowertail_p=0.001;
+int madfolds=3;
 
 void PrintHelp_one_line(string p, string m){
 	char para[p.length()+1];
@@ -63,7 +67,8 @@ void PrintHelp(){
 	PrintHelp_one_line("--angle -b <default:120>:", "minimal angle for knee point");
 	PrintHelp_one_line("--greedy -g <default:false>:", "Greedy mode, first founder below cutoff will be selected once found, which speed up computation but affect reprouciblity. Default is false which enforce to find the best founder! Not reommended!");
 	PrintHelp_one_line("--thread -t <int >1 |default:10>:", "Num of thread to use, minimal 2");
-	PrintHelp_one_line("--pool -p <int >0 |default:1000>:", "Total UMIs to process in each thread at one time");
+	PrintHelp_one_line("--pool -p <int >0 |default:48000>:", "Total UMIs per batch; first prod_size go to serial founder pass");
+	PrintHelp_one_line("--prod -d <int >0 |default:1000>:", "Serial founder pass size per batch");
         PrintHelp_one_line("--help -h:", "Show help");
 	exit(1);
 }
@@ -96,12 +101,13 @@ void PrintOptions(){
 
 	cout << "threads = " << num_thread << endl;
 	cout << "poolSize = " << pool_size << endl;
+	cout << "prodSize = " << prod_size << endl;
 
 	cout <<"********************************************"<<endl<<endl;
 }
 void ProcessArgs(int argc, char** argv)
 {
-      const char* const short_opts = "l:i:o:m:e:t:p:q:f:b:aghjkn";
+      const char* const short_opts = "l:i:o:m:e:t:p:d:q:f:b:aghjkn";
       const option long_opts[] = {
             {"maxL", required_argument, nullptr, 'l'},
             {"in", required_argument, nullptr, 'i'},
@@ -118,6 +124,7 @@ void ProcessArgs(int argc, char** argv)
 	    {"greedy", no_argument, nullptr, 'g'},
 	    {"thread", required_argument, nullptr, 't'},
 	    {"pool", required_argument, nullptr, 'p'},
+	    {"prod", required_argument, nullptr, 'd'},
             {"help", no_argument, nullptr, 'h'},
             {nullptr, no_argument, nullptr, 0}
       };
@@ -179,7 +186,12 @@ void ProcessArgs(int argc, char** argv)
                         break;
                   case 'p':
                         pool_size  = atoi(optarg);
+			user_set_pool_size = true;
                         break;
+		  case 'd':
+			prod_size = atoi(optarg);
+			user_set_prod_size = true;
+			break;
 
 		  case 'h': // -h or --help
                   case '?': // Unrecognized option
@@ -217,8 +229,12 @@ void capture_input_error(){
                 PrintHelp();
 
 	}
-	if ( pool_size < 1 ){
+	if ( user_set_pool_size && pool_size < 1 ){
 		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"pool_size="<<pool_size <<", Not more than 0"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
+                PrintHelp();
+	}
+	if ( user_set_prod_size && prod_size < 1 ){
+		cerr<<"!!!!!!!!!!!!INPUT ERROR:\n"<<"prod_size="<<prod_size <<", Not more than 0"<<endl<<"!!!!!!!!!!!!!!!!!!!!!!!!!!"<<endl;
                 PrintHelp();
 	}
 	if (num_thread <2){
@@ -246,29 +262,35 @@ int main(int argc, char **argv){
 	updated_count_file=out_file + ".umi.reads.count" ;
         estimate_out_file=out_file + ".estimate" ;
 	if (nb_estimate){
-		fit_nb_model(in_file, nb_lowertail_p, min_read_founder,  nb_estimated_molecule, median_rpu);
+		fit_nb_model(in_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu);
+		after_rpucut_molecule=nb_estimated_molecule;
 		if (just_estimate)
-			cout<<"NB_estimate\tON\nmedian_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<nb_estimated_molecule<<endl;
+			cout<<"NB_estimate\tON\nmedian_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<nb_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 	}
 	else if (kp_estimate){
 		fit_knee_plot ( in_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu, after_rpucut_molecule);
 		if (just_estimate)
-			cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<after_rpucut_molecule<<endl;
+			cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<kp_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 	}
 	else if (auto_estimate){
 		fit_knee_plot ( in_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu , after_rpucut_molecule);
 		if (kp_angle > kp_fail_angle ){
-			fit_nb_model(in_file, nb_lowertail_p, min_read_founder,  nb_estimated_molecule, median_rpu);
+			fit_nb_model(in_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu);
+			after_rpucut_molecule=nb_estimated_molecule;
 			if (just_estimate)
-				cout<<"NB_estimate\tON\nmedian_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<nb_estimated_molecule<<endl;
+				cout<<"NB_estimate\tON\nmedian_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<nb_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 		}
 		else{
 			if (just_estimate)
-				cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<after_rpucut_molecule<<endl;
+				cout<<"KP_estimate\tON\nknee_angle\t"<<kp_angle<<endl<<"median_rpu\t"<<median_rpu<<endl<<"rpu_cutoff\t"<<min_read_founder<<endl<<"estimated_molecules\t"<<kp_estimated_molecule<<endl<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 		}
 	}
 	if (user_set_min_read_founder)
                 min_read_founder=min_read_founder_user;
+	if (!user_set_pool_size)
+		pool_size = 48000;
+	if (!user_set_prod_size)
+		prod_size = 1000;
 	if (!just_estimate)
 		PrintOptions();
 	else
@@ -281,19 +303,20 @@ int main(int argc, char **argv){
 	parameters.greedy_mode=greedy_mode;
 	parameters.thread=num_thread;
 	parameters.pool_size=pool_size;
+	parameters.prod_size=prod_size;
 	clustering_umis(in_file, out_file,  parameters );
 	update_umi_reads_count(updated_count_file, in_file, out_file);
 	ofstream e_out_file(estimate_out_file, ios::out );
 	if (nb_estimate)
 	//negative binomial to estimate input
-		do_nb(updated_count_file, nb_lowertail_p, min_read_founder,  nb_estimated_molecule, median_rpu, e_out_file);
+		do_nb(updated_count_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu, e_out_file);
 	else if (kp_estimate)
 	//Knee plot to esitamte input
 		do_kp(updated_count_file,  min_read_founder,  kp_estimated_molecule, kp_angle,  median_rpu,  e_out_file);
 	else if (auto_estimate){
 		fit_knee_plot ( updated_count_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu, after_rpucut_molecule);
 		if (kp_angle > kp_fail_angle)
-			do_nb(updated_count_file, nb_lowertail_p, min_read_founder,  nb_estimated_molecule, median_rpu, e_out_file);
+			do_nb(updated_count_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu, e_out_file);
 		else
 			do_kp(updated_count_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu,  e_out_file);
 	}

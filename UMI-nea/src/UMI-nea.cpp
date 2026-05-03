@@ -18,10 +18,7 @@ static inline int encode_kmer(const char* s) {
 }
 
 //global variable
-atomic_int founder_added{0};
-// Consumer poll loop uses founder_added atomic + 10µs sleep instead of condition_variable.
 guardedvector founders;
-atomic<bool> producer_done{false};
 const int N_num=3;
 const string padding(N_num, 'N');
 bool verbose=false;
@@ -45,6 +42,42 @@ double var(const vector<int> v)
 	    square_sum_of_difference += tmp * tmp;
       }
       return (square_sum_of_difference / (len -1 ) );
+}
+
+double mad(const vector<int> v) {
+      vector<double> diff;
+      double median_v = median(v);
+      for (auto& each : v)
+            diff.push_back(abs(each - median_v));
+      sort(diff.begin(), diff.end());
+      return median(diff);
+}
+
+int calculate_dist_upper_bound_old(float error_rate, int max_umi_len) {
+      float z;
+      int alpha_i;
+      if (max_umi_len <= 20)
+            alpha_i = 1;
+      else if (max_umi_len > 20 && max_umi_len <= 30)
+            alpha_i = 2;
+      else if (max_umi_len > 30 && max_umi_len <= 40)
+            alpha_i = 3;
+      else
+            alpha_i = 4;
+      switch (alpha_i) {
+            case 1: z = 1.96; break;
+            case 2: z = 2.576; break;
+            case 3: z = 3.29; break;
+            case 4: z = 3.89; break;
+            default: z = 1.96;
+      }
+      float dist_upper_bound = max_umi_len * error_rate + z * sqrt(error_rate * (1 - error_rate) * max_umi_len);
+      int upper_ceil = ceil(dist_upper_bound);
+      int upper_floor = floor(dist_upper_bound);
+      if (max_umi_len <= 20)
+            return upper_floor > 0 ? upper_floor : 1;
+      else
+            return upper_ceil > 0 ? upper_ceil : 1;
 }
 
 int calculate_dist_upper_bound(float error_rate, int max_umi_len){
@@ -137,7 +170,8 @@ void do_kp( const string updated_count_file, int  min_read_founder, int kp_estim
 	e_out_file<<"KP_estimate\tON"<<endl;
 	e_out_file<<"median_rpu\t"<<median_rpu<<endl;
         e_out_file<<"rpu_cutoff\t"<<min_read_founder<<endl;
-	e_out_file<<"estimated_molecules\t"<<after_rpucut_molecule<<endl;
+	e_out_file<<"estimated_molecules\t"<<kp_estimated_molecule<<endl;
+	e_out_file<<"after_rpu-cutoff_molecules\t"<<after_rpucut_molecule<<endl;
 }
 
 double lengthSquare(pair<double,double> X, pair<double,double> Y)
@@ -221,18 +255,19 @@ void fit_knee_plot (const string  filename, int & min_read_founder, int & kp_est
 
 }
 
-void do_nb(const string  updated_count_file, float nb_lowertail_p,  int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file){
-        fit_nb_model(updated_count_file, nb_lowertail_p,  min_read_founder,  nb_estimated_molecule, median_rpu);
+void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file){
+        fit_nb_model(updated_count_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu);
 	if (verbose)
         	cout<<"After UMI clustering:"<<"\t"<<"rpu_cutoff using NB model="<<min_read_founder<<"\t"<<"nb_estimate_molecules="<<nb_estimated_molecule<<"\t"<<"median_rpu="<<median_rpu<<endl;
 	e_out_file<<"NB_estimate\tON"<<endl;
 	e_out_file<<"median_rpu\t"<<median_rpu<<endl;
         e_out_file<<"rpu_cutoff\t"<<min_read_founder<<endl;
         e_out_file<<"estimated_molecules\t"<<nb_estimated_molecule<<endl;
+        e_out_file<<"after_rpu-cutoff_molecules\t"<<nb_estimated_molecule<<endl;
 
 }
 
-void fit_nb_model( const string  filename, float  p,  int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
+void fit_nb_model( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
       vector<int>  umi_data;
       vector<int> read_replicated_data;
       read_umi_data(filename, umi_data,read_replicated_data );
@@ -274,6 +309,53 @@ void fit_nb_model( const string  filename, float  p,  int & min_read_founder, in
       nb_estimated_molecule=umi_filtered_data.size();
 }
 
+void fit_nb_model_old( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
+      vector<int>  umi_data;
+      vector<int> read_replicated_data;
+      read_umi_data(filename, umi_data, read_replicated_data);
+      if (umi_data.size() <= 1 ){
+            min_read_founder=umi_data[0];
+            nb_estimated_molecule=umi_data.size();
+            cout<<"UMI input file only has one UMI "<<endl;
+            return;
+      }
+      median_rpu=median(read_replicated_data);
+      int median_estimated_molecule=read_replicated_data.size()/median_rpu;
+      int mad_rpu=mad(read_replicated_data);
+      vector<int> read_replicated_filtered_data=read_replicated_data;
+      int lower_bound_rpu=0;
+      if (mad_rpu!=0){
+            lower_bound_rpu=median_rpu-madfolds*mad_rpu;
+            sort(read_replicated_data.begin(), read_replicated_data.end());
+            auto lower_bound_it = lower_bound(read_replicated_data.begin(), read_replicated_data.end(), lower_bound_rpu);
+            read_replicated_filtered_data=vector<int>(lower_bound_it, read_replicated_data.end());
+      }
+      if (var(read_replicated_filtered_data) == 0){
+            min_read_founder=umi_data[umi_data.size()-1];
+            nb_estimated_molecule=umi_data.size();
+            if (verbose)
+                  cout<<"Data to fit has var = 0"<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data)<<"\nMAD="<<mad_rpu<<endl;
+            return;
+      }
+      long double nb_p=mean(read_replicated_filtered_data)/var(read_replicated_filtered_data);
+      long double nb_r=pow(mean(read_replicated_filtered_data), 2)/(var(read_replicated_filtered_data)-mean(read_replicated_filtered_data));
+      if (verbose)
+            cout<<"lower_bound_rpu="<<lower_bound_rpu<<"\ndata_size="<<read_replicated_filtered_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data)<<"\nMAD="<<mad_rpu<<endl;
+      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){
+            min_read_founder=1;
+            nb_estimated_molecule=umi_data.size();
+            return;
+      }
+      int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2);
+      if (lower_nb==0)
+            lower_nb=1;
+      sort(umi_data.begin(), umi_data.end());
+      auto lower_bound_it2 = lower_bound(umi_data.begin(), umi_data.end(), lower_nb);
+      vector<int> umi_filtered_data(lower_bound_it2, umi_data.end());
+      min_read_founder=lower_nb;
+      nb_estimated_molecule=umi_filtered_data.size();
+}
+
 bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist){
       EdlibAlignMode mode = EDLIB_MODE_HW;
       EdlibAlignTask task = EDLIB_TASK_DISTANCE;
@@ -292,20 +374,17 @@ bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, in
       return false;
 }
 
-string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id, const unsigned max_dist, const unsigned max_umi_len)
+// Runs serially. No concurrent consumers, so no locking needed on founders.myvector.
+string producer(const vector<UMI_item> &umi_pool_subset, const string& primer_id, const unsigned max_dist, const unsigned max_umi_len)
 {
-      producer_done.store(false);
-
-      int founder_clustered=0;
       string buf;
       buf.reserve(umi_pool_subset.size() * 50);
       string padded_cached = padding;
       int cached_count = 0;
       const int K = 6;
       const int slot = (int)(max_umi_len + N_num);
-      // Direct-indexed k-mer table (same as consumer): faster than unordered_map.
       array<vector<int>, 4096> prod_kmer_tbl;
-      vector<bool> prod_in_cand;   // dedup bitset sized to cached_count
+      vector<bool> prod_in_cand;
       vector<int> prod_cands;
       prod_cands.reserve(32);
 
@@ -315,8 +394,8 @@ string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id,
 	    string line;
 	    line.reserve(primer_id.size() + 2 + umi.size() + 2 + umi.size() + 1);
 	    line = primer_id; line += '\t'; line += umi; line += '\t'; line += umi; line += '\n';
-	    if (founder_added>0){
-		  int curr_size = founders.myvector.size();
+	    int curr_size = (int)founders.myvector.size();
+	    if (curr_size > 0) {
 		  if (curr_size > cached_count) {
 			if ((int)prod_in_cand.size() < curr_size)
 			      prod_in_cand.resize(curr_size, false);
@@ -331,7 +410,6 @@ string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id,
 			}
 			cached_count = curr_size;
 		  }
-		  // K-mer pre-filter: find candidates in [offset, cached_count)
 		  prod_cands.clear();
 		  for (int p = 0; p + K <= (int)umi.size(); ++p) {
 			int km = encode_kmer(umi.data() + p);
@@ -362,292 +440,199 @@ string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id,
 			}
 		  }
 		  if (matched) {
-			founder_clustered++;
 			const string& clustered_founder = founders.myvector[matched_ind];
 			const string& chosen = (u.founder_temp_found && dist >= u.founder_temp_dist) ? u.founder_temp : clustered_founder;
 			line.clear();
 			line.reserve(primer_id.size() + 2 + umi.size() + 2 + chosen.size() + 1);
 			line = primer_id; line += '\t'; line += umi; line += '\t'; line += chosen; line += '\n';
 		  }
-		  else if (u.founder_temp_found ){
+		  else if (u.founder_temp_found) {
 			line.clear();
 			line.reserve(primer_id.size() + 2 + umi.size() + 2 + u.founder_temp.size() + 1);
 			line = primer_id; line += '\t'; line += umi; line += '\t'; line += u.founder_temp; line += '\n';
 		  }
-		  else{
-			founders.guard.lock();
+		  else {
 			founders.myvector.push_back(umi);
-			founders.guard.unlock();
-			founder_added++;
 		  }
 	    }
-	    else{
-		  founders.guard.lock();
+	    else {
 		  founders.myvector.push_back(umi);
-		  founders.guard.unlock();
-		  founder_added=1;
 	    }
 	    buf += line;
       }
-
-      founders.guard.lock();
-      founders.size_last_cycle=founders.myvector.size();
-      founders.guard.unlock();
-      producer_done.store(true);
       return buf;
 }
 
-pair<string, vector<UMI_item>> consumer(const int worker_index, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size)
+// Single-pass consumer: processes umi_pool[begin..end) against a read-only founder snapshot.
+// No polling, no locking. Called after producer() has finished establishing new founders.
+pair<string, vector<UMI_item>> consumer_pass(
+    const vector<UMI_item>& umi_pool, int begin, int end,
+    bool first_founder_mode, const string& primer_id,
+    unsigned max_dist, unsigned max_umi_len,
+    const array<vector<int>,4096>& kmer_idx,
+    const vector<string>& founder_view,
+    const string& padded_founders)
 {
       const int K = 6;
       const int slot = (int)(max_umi_len + N_num);
-      int stop_search_dist=1;
-      if (first_founder_mode)
-	    stop_search_dist=max_dist;
-      if (umi_pool_subset.size()==0){
-	    return {"", umi_pool_subset};
-      }
-      string buf;
-      buf.reserve(umi_pool_subset.size() * 50);
-      vector<UMI_item> updated_subset;
-      int founders_start_offset=0;
+      int stop_search_dist = first_founder_mode ? (int)max_dist : 1;
+      int n_founders = (int)founder_view.size();
 
-      // Hoist per-cycle allocations outside the loop so memory is reused across cycles.
-      // kmer_tbl: fixed 4096-slot direct array (12-bit encoded k-mer → founder indices).
-      // Only touched slots are cleared via kmer_used, avoiding full array reset each cycle.
-      array<vector<int>, 4096> kmer_tbl;
-      vector<int> kmer_used;
-      kmer_used.reserve(512);
-      vector<bool> in_cand;    // dedup bitset; grown as needed, reset per UMI
+      string buf;
+      buf.reserve((end - begin) * 50);
+      vector<UMI_item> unresolved;
+
+      vector<bool> in_cand(n_founders, false);
       vector<int> candidates;
       candidates.reserve(32);
       string small_target;
       small_target.reserve(32 * slot);
-      string padded_view;
-      vector<string> founder_view;
 
-      while (true) {
-	    while ((int)founder_added.load() <= founders_start_offset && !producer_done.load())
-		  this_thread::sleep_for(chrono::microseconds(10));
-	    int curr_founders_size;
-	    {
-		  shared_lock<shared_mutex> lk(founders.guard);
-		  curr_founders_size = (int)founders.myvector.size();
-		  if (curr_founders_size > founders_start_offset)
-			founder_view.assign(founders.myvector.begin() + founders_start_offset,
-					   founders.myvector.end());
+      for (int j = begin; j < end; ++j) {
+	    const UMI_item& one_umi_ref = umi_pool[j];
+	    const string& umi = one_umi_ref.UMI_seq;
+	    int relative_start = one_umi_ref.founder_offset;
+	    if (relative_start >= n_founders) {
+		  unresolved.push_back(one_umi_ref);
+		  continue;
 	    }
 
-	    if (curr_founders_size <= founders_start_offset) {
-		  return {buf, umi_pool_subset};
-	    }
-
-	    int step_size = (int)founder_view.size();
-
-	    // Build k-mer index and pre-padded founder string for this cycle.
-	    // Pigeonhole: any two 18-mers with Levenshtein dist ≤ 2 share ≥1 6-mer.
-	    kmer_used.clear();
-	    padded_view.clear();
-	    padded_view = padding;
-	    for (int i = 0; i < step_size; ++i) {
-		  const string& f = founder_view[i];
-		  padded_view.append(f);
-		  padded_view.append(max_umi_len + N_num - f.size(), 'N');
-		  for (int p = 0; p + K <= (int)f.size(); ++p) {
-			int km = encode_kmer(f.data() + p);
-			if (km < 0) continue;
-			if (kmer_tbl[km].empty()) kmer_used.push_back(km);
-			kmer_tbl[km].push_back(i);
+	    candidates.clear();
+	    for (int p = 0; p + K <= (int)umi.size(); ++p) {
+		  int km = encode_kmer(umi.data() + p);
+		  if (km < 0) continue;
+		  for (int idx : kmer_idx[km]) {
+			if (idx >= relative_start && !in_cand[idx]) {
+			      in_cand[idx] = true;
+			      candidates.push_back(idx);
+			}
 		  }
 	    }
-	    // Grow in_cand if this cycle has more founders than any previous cycle.
-	    if ((int)in_cand.size() < step_size) in_cand.resize(step_size, false);
+	    for (int idx : candidates) in_cand[idx] = false;
+	    sort(candidates.begin(), candidates.end());
 
-	    for (int j = 0; j < (int)umi_pool_subset.size(); ++j) {
-		  const UMI_item& one_umi_ref = umi_pool_subset[j];
-		  const string& umi = one_umi_ref.UMI_seq;
-		  int offset = one_umi_ref.founder_offset;
-		  int relative_start = offset - founders_start_offset;
-		  if (relative_start >= step_size) {
-			updated_subset.push_back(one_umi_ref);
-			continue;
+	    int endpos, dist;
+	    bool matched = false;
+	    int matched_ind = -1;
+	    if (!candidates.empty()) {
+		  small_target.clear();
+		  small_target = padding;
+		  for (int idx : candidates)
+			small_target.append(padded_founders, N_num + (size_t)idx * slot, slot);
+		  if (align_umi(one_umi_ref.padded_umi, small_target, max_dist, endpos, dist)) {
+			matched = true;
+			matched_ind = candidates[(endpos - N_num) / slot];
 		  }
-		  if (relative_start < 0) relative_start = 0;
+	    }
 
-		  // K-mer pre-filter: collect candidates in [relative_start, step_size)
-		  candidates.clear();
-		  for (int p = 0; p + K <= (int)umi.size(); ++p) {
-			int km = encode_kmer(umi.data() + p);
-			if (km < 0) continue;
-			for (int idx : kmer_tbl[km]) {
-			      if (idx >= relative_start && !in_cand[idx]) {
-				    in_cand[idx] = true;
-				    candidates.push_back(idx);
-			      }
-			}
-		  }
-		  for (int idx : candidates) in_cand[idx] = false; // reset for next UMI
-		  sort(candidates.begin(), candidates.end());
-
-		  int endpos, dist;
-		  bool matched = false;
-		  int matched_ind = -1;
-		  if (!candidates.empty()) {
-			small_target.clear();
-			small_target = padding;
-			for (int idx : candidates)
-			      small_target.append(padded_view, N_num + (size_t)idx * slot, slot);
-			if (align_umi(one_umi_ref.padded_umi, small_target, max_dist, endpos, dist)) {
-			      matched = true;
-			      matched_ind = candidates[(endpos - N_num) / slot];
-			}
-		  }
-
-		  if (matched) {
-			const string& clustered_founder = founder_view[matched_ind];
-			if (dist<=stop_search_dist){
-			      buf += primer_id; buf += '\t'; buf += umi; buf += '\t'; buf += clustered_founder; buf += '\n';
-			}
-			else {
-			      UMI_item one_umi = one_umi_ref;
-			      if( (!one_umi.founder_temp_found ) || (one_umi.founder_temp_found  && dist<one_umi.founder_temp_dist )  ){
-				    one_umi.founder_temp_found=true;
-				    one_umi.founder_temp=clustered_founder;
-				    one_umi.founder_temp_dist=dist;
-			      }
-			      one_umi.founder_offset = founders_start_offset + step_size;
-			      updated_subset.push_back(std::move(one_umi));
-			}
-		  }
-		  else{
+	    if (matched) {
+		  const string& clustered_founder = founder_view[matched_ind];
+		  if (dist <= stop_search_dist) {
+			buf += primer_id; buf += '\t'; buf += umi; buf += '\t'; buf += clustered_founder; buf += '\n';
+		  } else {
 			UMI_item one_umi = one_umi_ref;
-			one_umi.founder_offset = founders_start_offset + step_size;
-			updated_subset.push_back(std::move(one_umi));
+			if (!one_umi.founder_temp_found || dist < one_umi.founder_temp_dist) {
+			      one_umi.founder_temp_found = true;
+			      one_umi.founder_temp = clustered_founder;
+			      one_umi.founder_temp_dist = dist;
+			}
+			one_umi.founder_offset = n_founders;
+			unresolved.push_back(std::move(one_umi));
 		  }
-		  if  (!first_founder_mode && producer_done.load() ){
-			updated_subset.insert(updated_subset.end(), umi_pool_subset.begin()+j+1, umi_pool_subset.end());
-			umi_pool_subset = updated_subset;
-			return {buf, umi_pool_subset};
-		  }
+	    } else {
+		  UMI_item one_umi = one_umi_ref;
+		  one_umi.founder_offset = n_founders;
+		  unresolved.push_back(std::move(one_umi));
 	    }
-	    umi_pool_subset = updated_subset;
-	    updated_subset.clear();
-	    if (first_founder_mode)
-		  return {buf, umi_pool_subset};
-	    founders_start_offset += step_size;
-	    // Clear only the k-mer table slots we touched this cycle.
-	    for (int km : kmer_used) kmer_tbl[km].clear();
       }
+      return {buf, std::move(unresolved)};
 }
 
-vector <int> split_umi_to_threads_on_founder(vector<UMI_item> umi_pool, int threads, int pool_size){
-      vector<int> thread_founder_ends;
-      if (umi_pool.size()<1000){
-	    for (int i=0; i<threads; i++){
-		  thread_founder_ends.push_back(umi_pool.size());
-	    }
-	    return thread_founder_ends;
-      }
+// Shared read-only state snapshot for consumer threads.
+struct FounderSnapshot {
+      vector<string> founder_view;
+      array<vector<int>, 4096> kmer_idx;
+      string padded;
+};
 
-      ulong total_founder_computation=0;
-      int founders_size=founders.size_last_cycle;
-      for (auto umi : umi_pool){
-	    total_founder_computation+=(founders_size-umi.founder_offset);
-      }
-      //for the first round:
-      if (total_founder_computation==0){
-	    for (int i=0; i<threads; i++){
-		  thread_founder_ends.push_back(pool_size*(i+1));
+// Build a founder snapshot from the current global founders list.
+static FounderSnapshot build_founder_snapshot(unsigned max_umi_len)
+{
+      const int K = 6;
+      const int slot = (int)(max_umi_len + N_num);
+      FounderSnapshot fs;
+      fs.founder_view.assign(founders.myvector.begin(), founders.myvector.end());
+      int n = (int)fs.founder_view.size();
+      fs.padded = padding;
+      fs.padded.reserve(N_num + (size_t)n * slot);
+      for (int i = 0; i < n; ++i) {
+	    const string& f = fs.founder_view[i];
+	    fs.padded.append(f);
+	    fs.padded.append(max_umi_len + N_num - f.size(), 'N');
+	    for (int p = 0; p + K <= (int)f.size(); ++p) {
+		  int km = encode_kmer(f.data() + p);
+		  if (km >= 0) fs.kmer_idx[km].push_back(i);
 	    }
-	    return thread_founder_ends;
       }
-
-      ulong founder_computation_per_thread=ceil(total_founder_computation/threads);
-      int umi_counter=0;
-      int founder_counter=0;
-      int ct=0;
-      int umis_per_thread=0;
-      for (auto umi : umi_pool){
-	    founder_counter+=(founders.size_last_cycle-umi.founder_offset) ;
-	    umi_counter++;
-	    umis_per_thread++;
-	    if ( umis_per_thread < 200 )
-		 continue;
-            if (founder_counter>=founder_computation_per_thread){
-		  ct++;
-                  thread_founder_ends.push_back(umi_counter);
-                  founder_counter=0;
-		  umis_per_thread=0;
-            }
-      }
-      for (int i=thread_founder_ends.size(); i<threads; i++){
-	    thread_founder_ends.push_back(umi_pool.size());
-      }
-      thread_founder_ends[threads-1]=umi_pool.size(); //make sure the last thread will include last UMI
-      return thread_founder_ends;
+      return fs;
 }
 
+// Run consumer passes in parallel using OpenMP (persistent thread pool, no per-batch OS thread creation).
+// Returns combined {output_buf, unresolved} from all threads.
+static pair<string, vector<UMI_item>> run_consumers_omp(
+    const vector<UMI_item>& pool, int prod_end, int num_threads,
+    bool first_founder_mode, const string& primer_id,
+    unsigned max_dist, unsigned max_umi_len,
+    const FounderSnapshot& fs)
+{
+      int n_consumer = (int)pool.size() - prod_end;
+      if (n_consumer <= 0) return {};
+      // Over-subscribe 4× so dynamic scheduling can balance unequal UMI alignment costs.
+      int n_tasks = num_threads * 4;
+      int chunk = (n_consumer + n_tasks - 1) / n_tasks;
+      int actual_tasks = 0;
+      for (int i = 0; i < n_tasks; ++i) {
+	    if (prod_end + i * chunk < (int)pool.size()) actual_tasks++;
+	    else break;
+      }
+      vector<string>           tbufs(actual_tasks);
+      vector<vector<UMI_item>> tunresolved(actual_tasks);
+#pragma omp parallel for num_threads(num_threads) schedule(dynamic, 1)
+      for (int i = 0; i < actual_tasks; ++i) {
+	    int s = prod_end + i * chunk;
+	    int e = min((int)pool.size(), s + chunk);
+	    tie(tbufs[i], tunresolved[i]) =
+		  consumer_pass(pool, s, e, first_founder_mode, primer_id,
+		                max_dist, max_umi_len,
+		                fs.kmer_idx, fs.founder_view, fs.padded);
+      }
+      string buf;
+      vector<UMI_item> unresolved;
+      for (int i = 0; i < actual_tasks; ++i) {
+	    buf += tbufs[i];
+	    unresolved.insert(unresolved.end(),
+		  make_move_iterator(tunresolved[i].begin()),
+		  make_move_iterator(tunresolved[i].end()));
+      }
+      return {std::move(buf), std::move(unresolved)};
+}
+
+// Synchronous two-phase processing: used for drain loops and flush points.
 void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_clustering_parameters parameters)
 {
-      int max_dist = parameters.max_dist;
-      int num_worker_threads=parameters.thread;
-      int pool_size=parameters.pool_size;
-      int max_umi_len=parameters.max_umi_len;
-      int min_read_founder = parameters.min_read_founder;
-      bool first_founder_mode=parameters.greedy_mode;
-      string curr_primer_id= parameters.primer_id;
+      int prod_end = (int)min((size_t)parameters.prod_size, umi_pool.size());
+      vector<UMI_item> prod_slice(umi_pool.begin(), umi_pool.begin() + prod_end);
+      string prod_buf = producer(prod_slice, parameters.primer_id, parameters.max_dist, parameters.max_umi_len);
+      if (!prod_buf.empty()) out << prod_buf;
 
-      vector<int> thread_founder_ends=split_umi_to_threads_on_founder(umi_pool, parameters.thread, pool_size);
+      auto [buf, unresolved] = run_consumers_omp(
+	    umi_pool, prod_end, parameters.thread,
+	    parameters.greedy_mode, parameters.primer_id,
+	    parameters.max_dist, parameters.max_umi_len,
+	    build_founder_snapshot(parameters.max_umi_len));
 
-      producer_done.store(false);
-      vector<UMI_item> updated_umi_pool;
-      map<int, vector<UMI_item>> t_umis;
-      map<int, vector<UMI_item>> consumer_results;
-      vector<future<pair<string, vector<UMI_item>>>> cl_consumers;
-      const int t_umi_size = num_worker_threads - 1;
-
-      vector<UMI_item> umi_pool_subset(umi_pool.begin(), umi_pool.begin()+min(static_cast<unsigned long>(thread_founder_ends[0]) , umi_pool.size()));
-      future<string> fp_producer = async(launch::async, [umi_pool_subset, curr_primer_id, max_dist, max_umi_len]{
-	    return producer(cref(umi_pool_subset), curr_primer_id, max_dist, max_umi_len);
-      });
-      for (int i = 1; i < num_worker_threads; i++) {
-	    int first = min(static_cast<unsigned long>(thread_founder_ends[i-1]) , umi_pool.size());
-	    int last = min(static_cast<unsigned long>(thread_founder_ends[i]) , umi_pool.size());
-	    vector<UMI_item> one_d_umis;
-	    if (first == umi_pool.size()) {
-		  one_d_umis={};
-	    }
-	    else {
-		  one_d_umis={umi_pool.begin()+first, umi_pool.begin()+last};
-	    }
-	    t_umis[i]=one_d_umis;
-      }
-
-      // Track which t_umis index each cl_consumers entry corresponds to so results
-      // can be stored back under the correct key regardless of empty-slot skips.
-      vector<int> consumer_thread_ids;
-      for (int i = 1; i < num_worker_threads; i++) {
-	    if (t_umis[i].size()>0) {
-		  consumer_thread_ids.push_back(i);
-		  // Capture only this thread's vector (not the whole map) to avoid N full-map copies.
-		  cl_consumers.push_back(async(launch::async, [i, first_founder_mode, curr_primer_id, max_dist, max_umi_len, v=t_umis[i], t_umi_size]{
-			return consumer(i, first_founder_mode, curr_primer_id, max_dist, max_umi_len, std::move(v), t_umi_size);
-		  }));
-	    }
-      }
-      // Wait for producer; it sets producer_done which unblocks consumers.
-      // Write all output sequentially after join — no mutex needed.
-      string producer_buf = fp_producer.get();
-      if (!producer_buf.empty()) out << producer_buf;
-      for (int j = 0; j < (int)cl_consumers.size(); j++) {
-	    auto result = cl_consumers[j].get();
-	    if (!result.first.empty()) out << result.first;
-	    consumer_results[consumer_thread_ids[j]] = std::move(result.second);
-      }
-      for (int i = 1; i <= (int)t_umis.size(); i++) {
-	    updated_umi_pool.insert(updated_umi_pool.end(), consumer_results[i].begin(), consumer_results[i].end());
-      }
-      umi_pool = updated_umi_pool;
+      if (!buf.empty()) out << buf;
+      umi_pool = std::move(unresolved);
 }
 
 // Accumulates output for umi_pool[begin..end) into a returned string; avoids per-line mutex.
@@ -703,41 +688,26 @@ string founder_find ( const vector<UMI_item>& umi_pool, int begin, int end, cons
 }
 
 void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out, const unsigned num_worker_threads, const string& curr_primer_id, const unsigned  max_dist, const unsigned max_umi_len  ){
-      // Build k-mer index, founder_view, and padded string once; share read-only across all threads.
-      const int K = 6;
-      const int slot = (int)(max_umi_len + N_num);
-      vector<string> shared_founder_view(founders.myvector.begin(), founders.myvector.end());
-      int n_founders = (int)shared_founder_view.size();
-      array<vector<int>, 4096> shared_kmer_idx;
-      string shared_padded_founders = padding;
-      shared_padded_founders.reserve(N_num + (size_t)n_founders * slot);
-      for (int i = 0; i < n_founders; ++i) {
-	    const string& f = shared_founder_view[i];
-	    shared_padded_founders.append(f);
-	    shared_padded_founders.append(max_umi_len + N_num - f.size(), 'N');
-	    for (int p = 0; p + K <= (int)f.size(); ++p) {
-		  int km = encode_kmer(f.data() + p);
-		  if (km >= 0) shared_kmer_idx[km].push_back(i);
-	    }
-      }
-
-      // Divide by index range — avoids deep-copying 66k UMI_item objects (each with heap strings).
+      FounderSnapshot fs = build_founder_snapshot(max_umi_len);
       int n = (int)low_reads_umi_pool.size();
-      int chunk = (n + (int)num_worker_threads - 1) / (int)num_worker_threads;
-      vector<future<string>> futures;
-      for (int i = 0; i < (int)num_worker_threads; i++) {
+      int n_tasks = (int)num_worker_threads * 4;
+      int chunk = (n + n_tasks - 1) / n_tasks;
+      int actual_tasks = 0;
+      for (int i = 0; i < n_tasks; ++i) {
+	    if (i * chunk < n) actual_tasks++;
+	    else break;
+      }
+      vector<string> tbufs(actual_tasks);
+#pragma omp parallel for num_threads(num_worker_threads) schedule(dynamic, 1)
+      for (int i = 0; i < actual_tasks; ++i) {
 	    int s = i * chunk;
 	    int e = min(n, s + chunk);
-	    futures.push_back(async(launch::async, [s, e, &low_reads_umi_pool, curr_primer_id, max_dist, max_umi_len, i,
-	                                            &shared_kmer_idx, &shared_founder_view, &shared_padded_founders]() {
-		  return founder_find(low_reads_umi_pool, s, e, curr_primer_id, max_dist, max_umi_len, i,
-		                      shared_kmer_idx, shared_founder_view, shared_padded_founders);
-	    }));
+	    tbufs[i] = founder_find(low_reads_umi_pool, s, e, curr_primer_id,
+	                             max_dist, max_umi_len, i,
+	                             fs.kmer_idx, fs.founder_view, fs.padded);
       }
-      for (auto& f : futures) {
-	    string buf = f.get();
-	    if (!buf.empty()) out << buf;
-      }
+      for (auto& b : tbufs)
+	    if (!b.empty()) out << b;
 }
 
 void clustering_umis(const string in_filename, const string out_filename,  UMI_clustering_parameters parameters )
@@ -747,7 +717,9 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       int pool_size=parameters.pool_size;
       int max_umi_len=parameters.max_umi_len;
       int min_read_founder = parameters.min_read_founder;
-      int total_umis_in_a_run = num_worker_threads * pool_size;
+      // Fix 2: total batch size is pool_size, independent of thread count.
+      // More threads => finer division of the same batch => genuine speedup.
+      int total_umis_in_a_run = pool_size;
       vector<UMI_item> umi_pool;
       vector<UMI_item> low_reads_umi_pool;
       ifstream in_file(in_filename, ios::in )  ;
@@ -770,6 +742,24 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       int round=0;
       int lines=0;
 
+      // Fix 3: pipeline — producer for batch K+1 overlaps with consumers of batch K.
+      // consumers run via std::async (one wrapper thread) + OpenMP (thread pool) inside.
+      // producers run in the main thread while the async consumers are live.
+      // Consumers read a snapshot; founders.myvector is safe to modify during consumer phase.
+      future<pair<string,vector<UMI_item>>> consumers_future;
+      shared_ptr<vector<UMI_item>> inflight_pool_ptr;
+      bool has_inflight = false;
+
+      // Wait for in-flight consumers; collect their unresolved UMIs back into umi_pool.
+      auto collect_inflight = [&]() {
+	    if (!has_inflight) return;
+	    auto [buf, unresolved] = consumers_future.get();
+	    if (!buf.empty()) out_file << buf;
+	    for (auto& u : unresolved) umi_pool.push_back(std::move(u));
+	    inflight_pool_ptr.reset();
+	    has_inflight = false;
+      };
+
       while (getline(in_file, line)) {
 	    istringstream ss(line);
 	    lines++;
@@ -779,11 +769,12 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    one_umi.UMI_seq = umi;
 	    one_umi.padded_umi = padding + umi + padding;
 	    one_umi.founder_offset = 0;
-	    if (read_count < min_read_founder ){ //reach the line where the read count for umi less than the minimal requirement of founder
-		  while (!umi_pool.empty()) { //finish current umi_pool processing first
+	    if (read_count < min_read_founder ){
+		  collect_inflight();
+		  while (!umi_pool.empty()) {
 			parallel_processing( umi_pool,  out_file, parameters );
 		  }
-		  if (primer_id != curr_primer_id )   { //A new primer and this primer the first UMI < min_read_founder
+		  if (primer_id != curr_primer_id )   {
 			if (!low_reads_umi_pool.empty())
 				parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
 			low_reads_umi_pool.clear();
@@ -794,9 +785,10 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 		  continue;
 	    }
 
-	    if (primer_id != curr_primer_id ) { //a new primer
+	    if (primer_id != curr_primer_id ) {
 		  if ( verbose)
 			cout<<"A new group or primer:"<<primer_id<<" umi:"<<umi<<"\n";
+		  collect_inflight();
 		  while (!umi_pool.empty()) {
 			parallel_processing( umi_pool,  out_file, parameters );
                   }
@@ -805,18 +797,67 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 			low_reads_umi_pool.clear();
 		  }
 		  founders.myvector.clear();
-		  founders.size_last_cycle=0;
 		  round=0;
 	    }
 	    curr_primer_id=primer_id;
 	    parameters.primer_id=curr_primer_id;
 	    umi_pool.push_back(one_umi);
-	    if ( umi_pool.size() == total_umis_in_a_run){
+
+	    if ((int)umi_pool.size() == total_umis_in_a_run) {
 		  round++;
-		  parallel_processing( umi_pool,  out_file, parameters);
+
+		  // Phase A (pipeline): producer on first prod_end new file UMIs.
+		  // Overlaps with the previous batch's async consumers — safe because consumers
+		  // hold a snapshot of founders.myvector, not a live reference.
+		  int prod_end = (int)min((size_t)parameters.prod_size, umi_pool.size());
+		  {
+			vector<UMI_item> prod_slice(umi_pool.begin(), umi_pool.begin() + prod_end);
+			string prod_buf = producer(prod_slice, parameters.primer_id, parameters.max_dist, parameters.max_umi_len);
+			if (!prod_buf.empty()) out_file << prod_buf;
+		  }
+
+		  // Phase B: collect previous consumers.
+		  // Phase B+: producer on their unresolved — producer always writes every UMI
+		  // (matched, founder_temp, or new self-founder), so unresolved don't accumulate.
+		  if (has_inflight) {
+			auto [buf, unresolved] = consumers_future.get();
+			if (!buf.empty()) out_file << buf;
+			has_inflight = false;
+			inflight_pool_ptr.reset();
+			if (!unresolved.empty()) {
+			      string unresolved_buf = producer(unresolved, parameters.primer_id,
+			                                       parameters.max_dist, parameters.max_umi_len);
+			      if (!unresolved_buf.empty()) out_file << unresolved_buf;
+			}
+		  }
+
+		  // Phase C: build snapshot from updated founders, launch async consumers
+		  // on the unconsumed portion of this batch (umi_pool[prod_end..end)).
+		  // Capture parameters by value to prevent data races on primer_id updates.
+		  auto snap        = make_shared<FounderSnapshot>(build_founder_snapshot(parameters.max_umi_len));
+		  inflight_pool_ptr = make_shared<vector<UMI_item>>(std::move(umi_pool));
+		  umi_pool.clear();
+		  has_inflight = true;
+		  {
+			string   cap_primer_id = parameters.primer_id;
+			bool     cap_greedy    = parameters.greedy_mode;
+			unsigned cap_max_dist  = parameters.max_dist;
+			unsigned cap_umi_len   = parameters.max_umi_len;
+			int      cap_threads   = parameters.thread;
+			int      cap_prod_end  = prod_end;
+			consumers_future = async(launch::async,
+			      [pool_ptr = inflight_pool_ptr, snap_ptr = snap,
+			       cap_prod_end, cap_threads, cap_greedy,
+			       cap_primer_id, cap_max_dist, cap_umi_len]() {
+				    return run_consumers_omp(*pool_ptr, cap_prod_end, cap_threads,
+				          cap_greedy, cap_primer_id, cap_max_dist, cap_umi_len, *snap_ptr);
+			      });
+		  }
 	    }
       }
-      //read last line of input file
+
+      // Drain remaining UMIs synchronously.
+      collect_inflight();
       while (!umi_pool.empty()) {
 	    parallel_processing(umi_pool, out_file, parameters);
       }

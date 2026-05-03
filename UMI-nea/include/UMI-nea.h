@@ -6,7 +6,6 @@
 #include <future>
 #include <thread>
 #include <mutex>
-#include <shared_mutex>
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -27,6 +26,7 @@ typedef struct {
 	int max_dist;
 	int thread;
 	int pool_size;
+	int prod_size = 1000;  // UMIs handled by serial producer per batch
 	int max_umi_len;
 	int min_read_founder;
 	bool greedy_mode;
@@ -35,9 +35,7 @@ typedef struct {
 }UMI_clustering_parameters;
 
 struct guardedvector {
-   shared_mutex guard;
    vector<string> myvector;
-   int size_last_cycle=0;
 };
 
 typedef struct {
@@ -48,6 +46,12 @@ typedef struct {
 	int founder_temp_dist;
 	bool founder_temp_found=false;
 }UMI_item;
+
+inline vector<int> repeat_n(int n) {
+	vector<int> v;
+	for (int i = 0; i < n; i++) v.push_back(n);
+	return v;
+}
 
 template <typename T>
 T median(const vector<T> v){
@@ -87,25 +91,29 @@ double mean(const vector<int> v);
 
 double var(const vector<int> v);
 
+double mad(const vector<int> v);
+
 int count_umi(const string filename);
 
 int calculate_dist_upper_bound(float error_rate, int max_umi_len);
 
-void do_nb(const string  updated_count_file, float nb_lowertail_p, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file);
+int calculate_dist_upper_bound_old(float error_rate, int max_umi_len);
+
+void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file);
 
 void do_kp( const string updated_count_file, int  min_read_founder, int kp_estimated_molecule, int kp_angle, int median_rpu, ofstream & e_out_file  );
 
-void fit_nb_model( const string  filename, float  p, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu);
+void fit_nb_model( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu);
+
+void fit_nb_model_old( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu);
 
 void fit_knee_plot ( const string  filename, int & min_read_founder, int & kp_estimated_molecule, int & kp_angle, int & median_rpu, int & after_rpucut_molecule );
 
 bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist);
 
-string producer(const vector<UMI_item> &umi_pool_subset, const string primer_id, const unsigned max_dist, const unsigned max_umi_len);
+string producer(const vector<UMI_item> &umi_pool_subset, const string& primer_id, const unsigned max_dist, const unsigned max_umi_len);
 
-pair<string, vector<UMI_item>> consumer(const int worker_index, bool first_founder_mode, const string  primer_id, const unsigned  max_dist, const unsigned max_umi_len, vector<UMI_item> umi_pool_subset, const int t_umi_size);
-
-vector <int> split_umi_to_threads_on_founder(vector<UMI_item> umi_pool, int threads, int pool_size);
+pair<string, vector<UMI_item>> consumer_pass(const vector<UMI_item>& umi_pool, int begin, int end, bool first_founder_mode, const string& primer_id, unsigned max_dist, unsigned max_umi_len, const array<vector<int>,4096>& kmer_idx, const vector<string>& founder_view, const string& padded_founders);
 
 void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_clustering_parameters parameters);
 
