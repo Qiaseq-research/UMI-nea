@@ -750,12 +750,19 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       shared_ptr<vector<UMI_item>> inflight_pool_ptr;
       bool has_inflight = false;
 
-      // Wait for in-flight consumers; collect their unresolved UMIs back into umi_pool.
+      auto by_input_pos = [](const UMI_item& a, const UMI_item& b) {
+	    return a.input_pos < b.input_pos;
+      };
+
+      // Wait for in-flight consumers; merge their unresolved back into umi_pool in input order.
+      // Unresolved UMIs came from an earlier batch (lower input_pos) so they must precede the
+      // current umi_pool items; sorting by input_pos restores the correct processing order.
       auto collect_inflight = [&]() {
 	    if (!has_inflight) return;
 	    auto [buf, unresolved] = consumers_future.get();
 	    if (!buf.empty()) out_file << buf;
 	    for (auto& u : unresolved) umi_pool.push_back(std::move(u));
+	    sort(umi_pool.begin(), umi_pool.end(), by_input_pos);
 	    inflight_pool_ptr.reset();
 	    has_inflight = false;
       };
@@ -769,9 +776,11 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    one_umi.UMI_seq = umi;
 	    one_umi.padded_umi = padding + umi + padding;
 	    one_umi.founder_offset = 0;
+	    one_umi.input_pos = lines;
 	    if (read_count < min_read_founder ){
 		  collect_inflight();
 		  while (!umi_pool.empty()) {
+			sort(umi_pool.begin(), umi_pool.end(), by_input_pos);
 			parallel_processing( umi_pool,  out_file, parameters );
 		  }
 		  if (primer_id != curr_primer_id )   {
@@ -790,6 +799,7 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 			cout<<"A new group or primer:"<<primer_id<<" umi:"<<umi<<"\n";
 		  collect_inflight();
 		  while (!umi_pool.empty()) {
+			sort(umi_pool.begin(), umi_pool.end(), by_input_pos);
 			parallel_processing( umi_pool,  out_file, parameters );
                   }
 		  if (!low_reads_umi_pool.empty()){
@@ -806,29 +816,30 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 	    if ((int)umi_pool.size() == total_umis_in_a_run) {
 		  round++;
 
-		  // Phase A (pipeline): producer on first prod_end new file UMIs.
-		  // Overlaps with the previous batch's async consumers — safe because consumers
-		  // hold a snapshot of founders.myvector, not a live reference.
-		  int prod_end = (int)min((size_t)parameters.prod_size, umi_pool.size());
-		  {
-			vector<UMI_item> prod_slice(umi_pool.begin(), umi_pool.begin() + prod_end);
-			string prod_buf = producer(prod_slice, parameters.primer_id, parameters.max_dist, parameters.max_umi_len);
-			if (!prod_buf.empty()) out_file << prod_buf;
-		  }
-
-		  // Phase B: collect previous consumers.
-		  // Phase B+: producer on their unresolved — producer always writes every UMI
-		  // (matched, founder_temp, or new self-founder), so unresolved don't accumulate.
+		  // Phase B: collect the previous batch's async consumers and run their
+		  // unresolved through the producer BEFORE touching the new batch.
+		  // Running Phase B first ensures that high-read-count unresolved UMIs from
+		  // the previous batch establish founders before lower-read-count UMIs from
+		  // the current batch's Phase A can steal that role.
 		  if (has_inflight) {
 			auto [buf, unresolved] = consumers_future.get();
 			if (!buf.empty()) out_file << buf;
 			has_inflight = false;
 			inflight_pool_ptr.reset();
 			if (!unresolved.empty()) {
+			      sort(unresolved.begin(), unresolved.end(), by_input_pos);
 			      string unresolved_buf = producer(unresolved, parameters.primer_id,
 			                                       parameters.max_dist, parameters.max_umi_len);
 			      if (!unresolved_buf.empty()) out_file << unresolved_buf;
 			}
+		  }
+
+		  // Phase A: producer on the first prod_end UMIs of the new batch.
+		  int prod_end = (int)min((size_t)parameters.prod_size, umi_pool.size());
+		  {
+			vector<UMI_item> prod_slice(umi_pool.begin(), umi_pool.begin() + prod_end);
+			string prod_buf = producer(prod_slice, parameters.primer_id, parameters.max_dist, parameters.max_umi_len);
+			if (!prod_buf.empty()) out_file << prod_buf;
 		  }
 
 		  // Phase C: build snapshot from updated founders, launch async consumers
@@ -857,8 +868,11 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       }
 
       // Drain remaining UMIs synchronously.
+      // collect_inflight already sorts umi_pool by input_pos; re-sort before each
+      // parallel_processing call so that subsequent unresolved rounds stay in order.
       collect_inflight();
       while (!umi_pool.empty()) {
+	    sort(umi_pool.begin(), umi_pool.end(), by_input_pos);
 	    parallel_processing(umi_pool, out_file, parameters);
       }
       if (!low_reads_umi_pool.empty()){

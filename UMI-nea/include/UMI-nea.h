@@ -45,6 +45,7 @@ typedef struct {
 	string founder_temp;
 	int founder_temp_dist;
 	bool founder_temp_found=false;
+	int input_pos=0;    // 1-based line number in input file; used to restore input order after drain merges
 }UMI_item;
 
 inline vector<int> repeat_n(int n) {
