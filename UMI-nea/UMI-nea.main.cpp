@@ -19,11 +19,11 @@ string estimate_out_file;
 int max_dist=1;
 bool set_dist=false;
 int num_thread=10;
-int pool_size=0;  // 0 = auto-scale: max(48000, thread*2000)
+int pool_size=0;  // 0 = unset; default applied in main: 48000
 int min_read_founder_user=1;
 int min_read_founder=1;
 bool user_set_min_read_founder=false;
-int prod_size=0;   // 0 = auto: max(50, pool_size/(thread*4))
+int prod_size=0;   // 0 = unset; default applied in main: 1000
 bool user_set_pool_size=false;
 bool user_set_prod_size=false;
 bool nb_estimate=false;
@@ -322,8 +322,7 @@ int main(int argc, char **argv){
 	}
 	else{
 	// just do clustering and not estimating for cutoff(none of -n -k -a were selected), and estimated molecule will simply equal to # of clustered UMI groups
-		int estimate_molecules=count_umi(in_file);
-		estimate_molecules=count_umi(updated_count_file);
+		int estimate_molecules=count_umi(updated_count_file);
 		cout<<"Just do UMI clustering:"<<"\t"<<"rpu_cutoff=1"<<"\t"<<"estimate_molecules="<<estimate_molecules<<endl;
 		e_out_file<<"rpu_cutoff\t"<<1<<endl;
                 e_out_file<<"estimated_molecules\t"<<estimate_molecules<<endl;

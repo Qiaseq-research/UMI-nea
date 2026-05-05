@@ -48,14 +48,8 @@ typedef struct {
 	int input_pos=0;    // 1-based line number in input file; used to restore input order after drain merges
 }UMI_item;
 
-inline vector<int> repeat_n(int n) {
-	vector<int> v;
-	for (int i = 0; i < n; i++) v.push_back(n);
-	return v;
-}
-
 template <typename T>
-T median(const vector<T> v){
+T median(const vector<T>& v){
 	if (v.size()%2==1)
                 return v.at(v.size()/2);
         else
@@ -79,20 +73,20 @@ vector<int> findItems(T const &v, int target) {
 
 // Convert any map-like container to std::multimap<V,K> sorted descending by value
 template<typename Map>
-std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<int>>
+std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<typename Map::mapped_type>>
 invertMap(Map const &map)
 {
-        std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<int>> multimap;
+        std::multimap<typename Map::mapped_type, typename Map::key_type, std::greater<typename Map::mapped_type>> multimap;
         for (auto const &pair: map)
                 multimap.insert(std::make_pair(pair.second, pair.first));
         return multimap;
 }
 
-double mean(const vector<int> v);
+double mean(const vector<int>& v);
 
-double var(const vector<int> v);
+double var(const vector<int>& v);
 
-double mad(const vector<int> v);
+double mad(const vector<int>& v);
 
 int count_umi(const string filename);
 

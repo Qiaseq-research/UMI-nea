@@ -23,7 +23,7 @@ const int N_num=3;
 const string padding(N_num, 'N');
 bool verbose=false;
 
-double mean(const vector<int> v)
+double mean(const vector<int>& v)
 {
       long double sum = 0;
       for (auto &each: v)
@@ -31,7 +31,7 @@ double mean(const vector<int> v)
       return sum / v.size();
 }
 
-double var(const vector<int> v)
+double var(const vector<int>& v)
 {
       long double square_sum_of_difference = 0;
       long double mean_var = mean(v);
@@ -44,7 +44,7 @@ double var(const vector<int> v)
       return (square_sum_of_difference / (len -1 ) );
 }
 
-double mad(const vector<int> v) {
+double mad(const vector<int>& v) {
       vector<double> diff;
       double median_v = median(v);
       for (auto& each : v)
@@ -293,12 +293,11 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       if (verbose)
                 cout<<"\ndata_size="<<umi_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(umi_data)<<"\nVar="<<var(umi_data )<<endl;
 
-      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r very inaccurate, (found in some high input samples!) so just give UMI clustering results
+      if (nb_p<=0 || nb_p >=1 || nb_r <=0 || !isfinite((double)nb_r) ){ //in this case, nb fitting is bad and will cause esimate of nb_p or nb_r very inaccurate, (found in some high input samples!) so just give UMI clustering results
                 min_read_founder=umi_data[umi_data.size()-1];
                 nb_estimated_molecule=umi_data.size();
                 return;
       }
-      //int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ;
       int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2) ;
       if (lower_nb==0)
                 lower_nb=1; //observed UMI has at least one read
@@ -365,8 +364,8 @@ bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, in
       if (result.status == EDLIB_STATUS_OK ) {
 	    if (result.editDistance <= max_dist && result.editDistance >=0) {
 		  endpos=result.endLocations[0];
-		  edlibFreeAlignResult(result);
 		  dist=result.editDistance;
+		  edlibFreeAlignResult(result);
 		  return true;
 	    }
       }
@@ -787,6 +786,8 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
 			if (!low_reads_umi_pool.empty())
 				parallel_founder_find(low_reads_umi_pool,  out_file, num_worker_threads, curr_primer_id,  max_dist,max_umi_len  );
 			low_reads_umi_pool.clear();
+			founders.myvector.clear();
+			round=0;
 		  }
 		  low_reads_umi_pool.push_back(one_umi);
 		  curr_primer_id=primer_id;
