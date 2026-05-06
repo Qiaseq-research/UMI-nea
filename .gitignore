@@ -1,0 +1,9 @@
+# Build artifacts
+UMI-nea/UMI-nea
+UMI-nea/**/*.o
+
+# Benchmark simulation output directories
+benchmark/sim_*/
+
+# Claude Code
+.claude/
