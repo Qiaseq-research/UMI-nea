@@ -1,5 +1,7 @@
 #include "UMI-nea.h"
 
+using namespace std;
+
 // Encode a 6-mer as a 12-bit int (2 bits/base). Returns -1 on N or unknown base.
 static inline int encode_kmer(const char* s) {
     int code = 0;
@@ -53,32 +55,6 @@ double mad(const vector<int>& v) {
       return median(diff);
 }
 
-int calculate_dist_upper_bound_old(float error_rate, int max_umi_len) {
-      float z;
-      int alpha_i;
-      if (max_umi_len <= 20)
-            alpha_i = 1;
-      else if (max_umi_len > 20 && max_umi_len <= 30)
-            alpha_i = 2;
-      else if (max_umi_len > 30 && max_umi_len <= 40)
-            alpha_i = 3;
-      else
-            alpha_i = 4;
-      switch (alpha_i) {
-            case 1: z = 1.96; break;
-            case 2: z = 2.576; break;
-            case 3: z = 3.29; break;
-            case 4: z = 3.89; break;
-            default: z = 1.96;
-      }
-      float dist_upper_bound = max_umi_len * error_rate + z * sqrt(error_rate * (1 - error_rate) * max_umi_len);
-      int upper_ceil = ceil(dist_upper_bound);
-      int upper_floor = floor(dist_upper_bound);
-      if (max_umi_len <= 20)
-            return upper_floor > 0 ? upper_floor : 1;
-      else
-            return upper_ceil > 0 ? upper_ceil : 1;
-}
 
 int calculate_dist_upper_bound(float error_rate, int max_umi_len){
       float z;
@@ -124,7 +100,7 @@ int calculate_dist_upper_bound(float error_rate, int max_umi_len){
       return dist_upper_bound;
 }
 
-int count_umi(const string filename){
+int count_umi(const string& filename){
 	int count=0;
 	ifstream in_file(filename, ios::in )  ;
 	if(in_file.fail()){
@@ -162,7 +138,7 @@ void read_umi_data(const string  filename, vector<int> & umi_data, vector<int> &
       }
 }
 
-void do_kp( const string updated_count_file, int  min_read_founder, int kp_estimated_molecule, int kp_angle, int median_rpu,  ofstream & e_out_file ){
+void do_kp(const string& updated_count_file, int min_read_founder, int kp_estimated_molecule, int kp_angle, int median_rpu, ofstream& e_out_file){
 	int after_rpucut_molecule=0;
         fit_knee_plot ( updated_count_file,  min_read_founder,  kp_estimated_molecule, kp_angle, median_rpu, after_rpucut_molecule);
 	if (verbose)
@@ -198,7 +174,7 @@ double get_angle( pair<double,double> A, pair<double,double> B , pair<double,dou
 	return (beta);
 }
 
-void fit_knee_plot (const string  filename, int & min_read_founder, int & kp_estimated_molecule, int & kp_angle, int & median_rpu, int & after_rpucut_molecule ){
+void fit_knee_plot(const string& filename, int& min_read_founder, int& kp_estimated_molecule, int& kp_angle, int& median_rpu, int& after_rpucut_molecule){
 	vector<int>  umi_data;
 	set<int> umi_data_set;
 	vector<int> read_replicated_data;
@@ -255,7 +231,7 @@ void fit_knee_plot (const string  filename, int & min_read_founder, int & kp_est
 
 }
 
-void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder,  int nb_estimated_molecule, int median_rpu, ofstream & e_out_file){
+void do_nb(const string& updated_count_file, float nb_lowertail_p, int madfolds, int min_read_founder, int nb_estimated_molecule, int median_rpu, ofstream& e_out_file){
         fit_nb_model(updated_count_file, nb_lowertail_p, madfolds, min_read_founder,  nb_estimated_molecule, median_rpu);
 	if (verbose)
         	cout<<"After UMI clustering:"<<"\t"<<"rpu_cutoff using NB model="<<min_read_founder<<"\t"<<"nb_estimate_molecules="<<nb_estimated_molecule<<"\t"<<"median_rpu="<<median_rpu<<endl;
@@ -267,7 +243,7 @@ void do_nb(const string  updated_count_file, float nb_lowertail_p, int madfolds,
 
 }
 
-void fit_nb_model( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
+void fit_nb_model(const string& filename, float p, int madfolds, int& min_read_founder, int& nb_estimated_molecule, int& median_rpu){
       vector<int>  umi_data;
       vector<int> read_replicated_data;
       read_umi_data(filename, umi_data,read_replicated_data );
@@ -308,52 +284,6 @@ void fit_nb_model( const string  filename, float  p, int madfolds, int & min_rea
       nb_estimated_molecule=umi_filtered_data.size();
 }
 
-void fit_nb_model_old( const string  filename, float  p, int madfolds, int & min_read_founder, int &  nb_estimated_molecule, int & median_rpu){
-      vector<int>  umi_data;
-      vector<int> read_replicated_data;
-      read_umi_data(filename, umi_data, read_replicated_data);
-      if (umi_data.size() <= 1 ){
-            min_read_founder=umi_data[0];
-            nb_estimated_molecule=umi_data.size();
-            cout<<"UMI input file only has one UMI "<<endl;
-            return;
-      }
-      median_rpu=median(read_replicated_data);
-      int median_estimated_molecule=read_replicated_data.size()/median_rpu;
-      int mad_rpu=mad(read_replicated_data);
-      vector<int> read_replicated_filtered_data=read_replicated_data;
-      int lower_bound_rpu=0;
-      if (mad_rpu!=0){
-            lower_bound_rpu=median_rpu-madfolds*mad_rpu;
-            sort(read_replicated_data.begin(), read_replicated_data.end());
-            auto lower_bound_it = lower_bound(read_replicated_data.begin(), read_replicated_data.end(), lower_bound_rpu);
-            read_replicated_filtered_data=vector<int>(lower_bound_it, read_replicated_data.end());
-      }
-      if (var(read_replicated_filtered_data) == 0){
-            min_read_founder=umi_data[umi_data.size()-1];
-            nb_estimated_molecule=umi_data.size();
-            if (verbose)
-                  cout<<"Data to fit has var = 0"<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data)<<"\nMAD="<<mad_rpu<<endl;
-            return;
-      }
-      long double nb_p=mean(read_replicated_filtered_data)/var(read_replicated_filtered_data);
-      long double nb_r=pow(mean(read_replicated_filtered_data), 2)/(var(read_replicated_filtered_data)-mean(read_replicated_filtered_data));
-      if (verbose)
-            cout<<"lower_bound_rpu="<<lower_bound_rpu<<"\ndata_size="<<read_replicated_filtered_data.size()<<"\nNB_p="<<nb_p<<"\nNB_r="<<nb_r<<"\nMedian="<<median_rpu<<"\nMean="<<mean(read_replicated_filtered_data)<<"\nVar="<<var(read_replicated_filtered_data)<<"\nMAD="<<mad_rpu<<endl;
-      if (nb_p<=0 || nb_p >=1 || nb_r <=0 ){
-            min_read_founder=1;
-            nb_estimated_molecule=umi_data.size();
-            return;
-      }
-      int lower_nb = boost::math::quantile( boost::math::negative_binomial(nb_r, nb_p), p/2);
-      if (lower_nb==0)
-            lower_nb=1;
-      sort(umi_data.begin(), umi_data.end());
-      auto lower_bound_it2 = lower_bound(umi_data.begin(), umi_data.end(), lower_nb);
-      vector<int> umi_filtered_data(lower_bound_it2, umi_data.end());
-      min_read_founder=lower_nb;
-      nb_estimated_molecule=umi_filtered_data.size();
-}
 
 bool align_umi(const string& umi, const string& f, int max_dist, int& endpos, int& dist){
       EdlibAlignMode mode = EDLIB_MODE_HW;
@@ -635,7 +565,7 @@ void parallel_processing( vector<UMI_item>& umi_pool,  ofstream& out, UMI_cluste
 }
 
 // Accumulates output for umi_pool[begin..end) into a returned string; avoids per-line mutex.
-string founder_find ( const vector<UMI_item>& umi_pool, int begin, int end, const string primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool, const array<vector<int>, 4096>& kmer_idx, const vector<string>& founder_view, const string& padded_founders ){
+string founder_find ( const vector<UMI_item>& umi_pool, int begin, int end, const string& primer_id, const unsigned  max_dist, const unsigned max_umi_len, const int pool, const array<vector<int>, 4096>& kmer_idx, const vector<string>& founder_view, const string& padded_founders ){
       const int K = 6;
       const int slot = (int)(max_umi_len + N_num);
       string buf;
@@ -709,7 +639,7 @@ void parallel_founder_find ( vector<UMI_item> low_reads_umi_pool,  ofstream& out
 	    if (!b.empty()) out << b;
 }
 
-void clustering_umis(const string in_filename, const string out_filename,  UMI_clustering_parameters parameters )
+void clustering_umis(const string& in_filename, const string& out_filename, UMI_clustering_parameters parameters)
 {
       int max_dist = parameters.max_dist;
       int num_worker_threads=parameters.thread;
@@ -882,7 +812,7 @@ void clustering_umis(const string in_filename, const string out_filename,  UMI_c
       cout <<"All done!" << endl;
 }
 
-void update_umi_reads_count(const string updated_count_filename, const string in_filename, const string out_filename){
+void update_umi_reads_count(const string& updated_count_filename, const string& in_filename, const string& out_filename){
 	unordered_map<string, int> umi_count;
 	ifstream in_file(in_filename, ios::in )  ;
 	if(in_file.fail()){

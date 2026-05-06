@@ -51,10 +51,10 @@ run_UMI-nea() {
         maxl=`cat UMI-nea/sim${rep}.input | cut -f2 | awk '{print length($1)}' | sort -nr | head -1`
         echo "$name r=$rep t=$td UMI-nea" >> UMI-nea.time
         if [ $dist -eq 0 ]; then
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/home/jdeng/claude/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -e $err_rate >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
             dist=`cat log/UMI-nea.sim${rep}.t$td.log | grep "maxdist" | awk '{print $NF}'`
         else
-            { time timeout ${time_lim} bash -c "/Download/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -m $dist >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
+            { time timeout ${time_lim} bash -c "/home/jdeng/claude/UMI-nea/UMI-nea/UMI-nea -i UMI-nea/sim${rep}.input -o UMI-nea/sim${rep}.t$td.clustered -l $maxl -t $td -m $dist >> log/UMI-nea.sim${rep}.t$td.log"; } 2>> UMI-nea.time
         fi
         join <(cat UMI-nea/sim${rep}.t$td.clustered | awk '{print $2,$3}' | sort -k1,1) <(cat UMI-nea/sim${rep}.input | awk '{print $2,$3}' | sort -k1,1) | sort -k2,2 | awk -v n=0 -v p="" '{if(p=="" || $2==p){p=$2;print $0,n}else{n+=1;p=$2;print $0,n}}' | sort -k1,1 | awk '{for(i=1;i<=$3;i++){print $1,$NF}}' > UMI-nea/sim${rep}.t$td.labels
         get_clustering_score UMI-nea/sim${rep}.t$td.labels sim${rep}.truth.labels UMI-nea.sim${rep}.t$td.score
@@ -159,7 +159,7 @@ run_calib() {
             cat sim${rep}.out | awk -v ul=$umi_len -v seq=$seq -v OFS="\n" '{if(length($1)<ul){ul=length($1)};print "@read:"NR"-"$1,substr($1,1,ul)substr(seq,1,length(seq)-ul),"+",substr($1,1,ul)substr(seq,1,length(seq)-ul)}' > calib/sim${rep}.R1.fastq
             cat sim${rep}.out | awk -v seq=$seq_rc -v OFS="\n" '{print "@read:"NR"-"$1,seq,"+",seq}' > calib/sim${rep}.R2.fastq
         fi
-        { time timeout ${time_lim} bash -c "/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}.t$td. -c $td 1> log/calib.sim${rep}.t$td.log 2>&1"; } 2>> calib.time
+        { time timeout ${time_lim} bash -c "/home/jdeng/Download/calib/calib -f calib/sim${rep}.R1.fastq -r calib/sim${rep}.R2.fastq -l1 $umi_len -l2 0 -o calib/sim${rep}.t$td. -c $td 1> log/calib.sim${rep}.t$td.log 2>&1"; } 2>> calib.time
         cat calib/sim${rep}.t$td.cluster | cut -f1,4 | awk '{l=split($2,n,"-");print n[l],$1}' | sort -k1,1 > calib/sim${rep}.t$td.labels
         get_clustering_score calib/sim${rep}.t$td.labels sim${rep}.truth.labels calib.sim${rep}.t$td.score
     fi

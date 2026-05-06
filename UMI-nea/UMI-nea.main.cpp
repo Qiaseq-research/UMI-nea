@@ -1,12 +1,5 @@
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <vector>
-#include <stdio.h>
-#include <algorithm>
-#include <map>
-#include <regex>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <getopt.h>
 #include "UMI-nea.h"
 
@@ -44,12 +37,8 @@ bool greedy_mode=false; //quick search mode, once founder found, immediately sto
 float nb_lowertail_p=0.001;
 int madfolds=3;
 
-void PrintHelp_one_line(string p, string m){
-	char para[p.length()+1];
-	char message[m.length()+1];
-	strcpy(para, p.c_str());
-	strcpy(message, m.c_str());
-	printf ("%-36s%-10s\n", para, message);
+void PrintHelp_one_line(const string& p, const string& m){
+	printf("%-36s%-10s\n", p.c_str(), m.c_str());
 }
 
 void PrintHelp(){
